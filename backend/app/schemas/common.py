@@ -52,3 +52,33 @@ class ResearchOutputRead(BaseModel):
     sources: list[SourceRead]
     provider_errors: list[dict]
     coverage: float
+
+
+class ResearchRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    idea_id: int | None
+    topic: str | None
+    topic_key: str
+    summary_text: str | None
+    status: str
+    coverage: float | None
+    providers_used: list[str]
+    provider_errors: dict | None
+    sources: list[SourceRead]
+    created_at: datetime
+    updated_at: datetime
+
+
+class ResearchStartRead(BaseModel):
+    id: int
+    status: str
+    cached: bool
+
+
+class DashboardRead(BaseModel):
+    idea_count: int
+    research_count: int
+    article_count: int
+    publish_job_count: int

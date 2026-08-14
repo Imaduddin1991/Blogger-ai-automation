@@ -1,6 +1,6 @@
 # Product Discovery — blogger-ai-automation
 
-**Status:** Step 1 complete (approved). Phase 1 skeleton complete (backend + frontend shell) — pending approval. No business functionality yet.
+**Status:** Step 1 complete (approved). Phase 1 skeleton complete (backend + frontend shell). Phase 2 AI + research pipeline complete (Ollama client, research with cache, summarize stage, research review UI) — live-verified end-to-end.
 **Method:** gstack workflow — office-hours (product discovery), plan-ceo-review + plan-eng-review (review lenses) applied to this document.
 **Decisions locked in this step (user-confirmed):**
 - Self-hosted, single-user (no account system in v1)

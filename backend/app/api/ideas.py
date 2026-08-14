@@ -1,13 +1,15 @@
-"""Idea endpoints: create and list the starting blog topics."""
+"""Idea endpoints: create, list, and start research for a blog topic."""
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.deps import require_local_token
-from app.schemas.common import IdeaCreate, IdeaRead
+from app.schemas.common import IdeaCreate, IdeaRead, ResearchStartRead
 from db.base import get_db
 from db.models import Idea
+from pipeline.research.service import STATUS_COMPLETE, create_research
+from services.research_runner import start_background_research
 
 router = APIRouter(prefix="/api/ideas", tags=["ideas"], dependencies=[Depends(require_local_token)])
 
@@ -32,3 +34,16 @@ def get_idea(idea_id: int, db: Session = Depends(get_db)) -> Idea:
     if idea is None:
         raise HTTPException(status_code=404, detail="Idea not found")
     return idea
+
+
+@router.post("/{idea_id}/research", response_model=ResearchStartRead, status_code=201)
+def start_research_for_idea(idea_id: int, db: Session = Depends(get_db)) -> ResearchStartRead:
+    """Kick off research for an idea (or return a completed cache hit)."""
+    idea = db.get(Idea, idea_id)
+    if idea is None:
+        raise HTTPException(status_code=404, detail="Idea not found")
+    research = create_research(db, idea.id, idea.title)
+    cached = research.status == STATUS_COMPLETE
+    if not cached:
+        start_background_research(research.id)
+    return ResearchStartRead(id=research.id, status=research.status, cached=cached)

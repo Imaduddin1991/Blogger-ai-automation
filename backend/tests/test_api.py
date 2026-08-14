@@ -22,6 +22,16 @@ def client():
         yield c
 
 
+@pytest.fixture(autouse=True)
+def reset_db():
+    """Drop + recreate all tables between tests (the file DB is shared)."""
+    from db.base import Base, engine
+
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    yield
+
+
 def test_health_ok(client):
     data = client.get("/api/health").json()
     assert data["status"] == "ok"
@@ -64,3 +74,60 @@ def test_settings_masks_secret_values(client):
     for row in rows:
         if row["key"] in {"encryption_key", "local_auth_token"}:
             assert row["value"] == "********"
+
+
+@pytest.fixture
+def noop_runner(monkeypatch):
+    """Replace the background runner's job with a recording no-op.
+
+    Keeps API tests deterministic and network-free: a research run is queued
+    but never actually executes providers/LLM in this process.
+    """
+    started: list[int] = []
+
+    async def fake_run(research_id: int, limit: int) -> None:
+        started.append(research_id)
+
+    monkeypatch.setattr("services.research_runner._run", fake_run)
+    return started
+
+
+def test_start_research_queues_job(client, noop_runner):
+    idea = client.post("/api/ideas", json={"title": "Why solar panels work"}).json()
+    start = client.post(f"/api/ideas/{idea['id']}/research").json()
+    assert start["cached"] is False
+    assert start["status"] == "researching"
+
+    # The worker thread records the id asynchronously; poll briefly.
+    import time
+
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline and noop_runner != [start["id"]]:
+        time.sleep(0.05)
+    assert noop_runner == [start["id"]]
+
+    research = client.get(f"/api/research/{start['id']}").json()
+    assert research["id"] == start["id"]
+    assert research["status"] == "researching"
+    assert research["sources"] == []
+
+
+def test_research_not_found(client):
+    assert client.get("/api/research/999").status_code == 404
+
+
+def test_research_list_and_dashboard_empty(client):
+    assert client.get("/api/research").json() == []
+    assert client.get("/api/dashboard").json() == {
+        "idea_count": 0,
+        "research_count": 0,
+        "article_count": 0,
+        "publish_job_count": 0,
+    }
+
+
+def test_dashboard_counts(client):
+    client.post("/api/ideas", json={"title": "A"})
+    client.post("/api/ideas", json={"title": "B"})
+    data = client.get("/api/dashboard").json()
+    assert data["idea_count"] == 2

@@ -69,8 +69,10 @@ class Research(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     idea_id: Mapped[int | None] = mapped_column(ForeignKey("ideas.id"), nullable=True)
+    topic: Mapped[str | None] = mapped_column(String(500), nullable=True)
     topic_key: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     summary_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    coverage: Mapped[float | None] = mapped_column(Float, nullable=True)
     providers_used: Mapped[list[str]] = mapped_column(JSON, default=list)
     provider_errors: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="draft")

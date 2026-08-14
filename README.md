@@ -38,7 +38,13 @@ and architecture plan.
 
 ## Status
 
-**Phase 1 complete (pending approval): skeleton.** Backend (FastAPI + SQLite + research
-provider abstraction, reviewed, 19 tests) and frontend shell (Next.js, 7 pages, dark/light
+**Phase 1 complete: skeleton.** Backend (FastAPI + SQLite + research provider
+abstraction, reviewed, 19 tests) and frontend shell (Next.js, 7 pages, dark/light
 theme, loading/error/empty states, reviewed, 7 tests). No business functionality yet.
-Next: Phase 2 — AI + research pipeline. See `docs/01-product-discovery.md` §13.
+
+**Phase 2 complete: AI + research pipeline.** Ollama client (qwen2.5:1.5b default),
+research via Wikimedia/Wikidata/DuckDuckGo with topic-key caching, LLM summarize
+stage (prompt-injection hardened, graceful degradation when Ollama is offline),
+background serial worker, and working dashboard/ideas/research pages that proxy to
+the API. Backend: 46 tests. Frontend: 13 tests.
+Next: Phase 3 — article generation. See `docs/01-product-discovery.md` §13.

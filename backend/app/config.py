@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{_DEFAULT_DATA_DIR}/blogger_ai.db"
 
     ollama_url: str = "http://127.0.0.1:11434"
-    ollama_default_model: str = "qwen2.5:3b"
+    ollama_default_model: str = "qwen2.5:1.5b"
 
     local_auth_token: str = ""
     encryption_key: str = ""

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { LayoutDashboard } from "lucide-react";
 
-import { PlaceholderPage } from "@/components/layout/placeholder-page";
+import { DashboardView } from "@/components/dashboard/dashboard-view";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -9,13 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function DashboardPage() {
-  return (
-    <PlaceholderPage
-      title="Dashboard"
-      description="Overview of your article pipeline."
-      icon={LayoutDashboard}
-      emptyTitle="Nothing running yet"
-      emptyDescription="Once you create an idea, the pipeline stages will appear here with live status."
-    />
-  );
+  return <DashboardView />;
 }

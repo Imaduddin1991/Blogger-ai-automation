@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { Lightbulb } from "lucide-react";
 
-import { PlaceholderPage } from "@/components/layout/placeholder-page";
+import { IdeasView } from "@/components/ideas/ideas-view";
 
 export const metadata: Metadata = {
   title: "Ideas",
@@ -9,13 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function IdeasPage() {
-  return (
-    <PlaceholderPage
-      title="Ideas"
-      description="Enter a blog topic and turn it into a researched article."
-      icon={Lightbulb}
-      emptyTitle="No ideas yet"
-      emptyDescription="Your first blog idea will appear here. New ideas start the research pipeline."
-    />
-  );
+  return <IdeasView />;
 }
