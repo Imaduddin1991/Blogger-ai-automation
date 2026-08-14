@@ -59,10 +59,12 @@
 - Guardrails: system prompt pinned; research text treated as untrusted data (prompt-injection resistant); human review is the final gate.
 
 **Research requirements (discovery item 11):**
-- Sources: Wikimedia REST API (search, summary, page images, categories), Wikidata REST/SPARQL, DuckDuckGo Instant Answer API.
-- Output: a research summary (per-article) plus a list of sources (title, URL, snippet, relevance).
+- **ResearchProvider is a strict abstraction** (design constraint). The core pipeline depends only on the provider interface, never on a specific provider. Each provider implements a common contract (search/query -> normalized `Source` results) and registers itself in a provider registry.
+- Initial free providers: Wikimedia REST API (search, summary, page images, categories), Wikidata REST/SPARQL, DuckDuckGo Instant Answer API. These are the first implementations, **not** assumed to be comprehensive coverage for every topic.
+- Additional free providers can be added later (a new class implementing the interface + registry entry) **without changing the core research pipeline** — no changes to pipeline logic, article generation, or the data model.
+- The orchestrator runs all enabled providers for a topic, merges results, deduplicates, and produces the research summary plus a list of sources (title, URL, snippet, relevance).
 - Research is cached by topic hash; re-research is explicit.
-- Graceful degradation: if a source is down, continue with the others and note coverage.
+- Graceful degradation: if a provider is down, continue with the others and note coverage.
 - Every article section can reference its sources; sources are surfaced in the review UI and optionally injected into the post as links.
 
 **Image requirements (discovery item 12):**
@@ -208,7 +210,15 @@ blogger-ai-automation/
 │   │   └── deps.py             # auth guard (local token)
 │   ├── pipeline/
 │   │   ├── state.py            # article state machine + transitions
-│   │   ├── research.py         # Wikimedia/Wikidata/DDG fetching + cache
+│   │   ├── research/           # orchestrator: runs enabled providers, merges + dedupes, caches
+│   │   │   ├── __init__.py     # run_research(topic, ...) entry point
+│   │   │   └── providers/      # ResearchProvider interface + registry
+│   │   │       ├── __init__.py
+│   │   │       ├── base.py     # ResearchProvider ABC + Source model (strict contract)
+│   │   │       ├── registry.py # provider registry (add a provider here + one class)
+│   │   │       ├── wikimedia.py# initial provider: Wikimedia REST
+│   │   │       ├── wikidata.py # initial provider: Wikidata REST
+│   │   │       └── duckduckgo.py# initial provider: DDG Instant Answer
 │   │   ├── summarize.py        # research -> summary + sources (LLM)
 │   │   ├── draft.py            # summary -> article draft (LLM)
 │   │   ├── seo.py              # SEO metadata + checks (LLM + rules)

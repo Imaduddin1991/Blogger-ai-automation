@@ -19,7 +19,7 @@ Project instruction file for working in this repo with OpenCode/gstack.
 ## Key decisions (product discovery, Step 1)
 
 - v1 is **self-hosted, single-user** (no account system; one Blogger connection, one Ollama).
-- Research uses **structured free APIs only**: Wikimedia/Wikipedia REST, Wikidata, DuckDuckGo Instant Answer.
+- Research uses a **strict ResearchProvider abstraction**. Initial free providers: Wikimedia/Wikipedia REST, Wikidata, DuckDuckGo Instant Answer. More providers can be added without touching the core pipeline.
 - Images via **free CC/stock sources first** (Wikimedia Commons, optional Pexels/Unsplash free tiers). Local generation is a later, optional module.
 - Default Ollama model class is **3-4B** (configurable per task).
 
