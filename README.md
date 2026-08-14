@@ -3,8 +3,15 @@
 A FREE, self-hosted AI Blogger automation platform. Turn a blog idea into a
 researched, quality-checked, image-ready article and publish it to Blogger.
 
-This is a **planning-only workspace**. No application code yet. See `docs/`
-for the product discovery and architecture plan.
+This is a self-hosted, local-first tool. See `docs/` for the product discovery
+and architecture plan.
+
+## Layout
+
+- `backend/` — FastAPI + SQLite (SQLAlchemy), research provider abstraction, API skeleton
+- `frontend/` — Next.js + TypeScript + Tailwind + shadcn/ui shell (dashboard, ideas, articles,
+  research, scheduler, publishing, settings)
+- `docs/` — planning and design documents
 
 ## What it does
 
@@ -31,5 +38,7 @@ for the product discovery and architecture plan.
 
 ## Status
 
-**Step 1 complete: workspace + product discovery.** Planning in `docs/`.
-Implementation has not started.
+**Phase 1 complete (pending approval): skeleton.** Backend (FastAPI + SQLite + research
+provider abstraction, reviewed, 19 tests) and frontend shell (Next.js, 7 pages, dark/light
+theme, loading/error/empty states, reviewed, 7 tests). No business functionality yet.
+Next: Phase 2 — AI + research pipeline. See `docs/01-product-discovery.md` §13.

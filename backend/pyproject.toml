@@ -1,0 +1,10 @@
+[project]
+name = "blogger-ai-automation-backend"
+version = "0.1.0"
+description = "Self-hosted AI Blogger automation backend (Phase 1 skeleton)"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"

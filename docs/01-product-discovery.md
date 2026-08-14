@@ -1,6 +1,6 @@
 # Product Discovery — blogger-ai-automation
 
-**Status:** Complete (Step 1). No application code exists yet.
+**Status:** Step 1 complete (approved). Phase 1 skeleton complete (backend + frontend shell) — pending approval. No business functionality yet.
 **Method:** gstack workflow — office-hours (product discovery), plan-ceo-review + plan-eng-review (review lenses) applied to this document.
 **Decisions locked in this step (user-confirmed):**
 - Self-hosted, single-user (no account system in v1)
@@ -337,10 +337,10 @@ No credentials are ever committed. OAuth secrets and tokens live only in local s
 
 ## 13. Proposed development phases
 
-Each phase ends with `/review` (and `/qa` once a usable app exists) before the next begins. Phase 1 not started — awaiting approval.
+Each phase ends with `/review` (and `/qa` once a usable app exists) before the next begins.
 
 - **Phase 0 (done):** workspace, git init, planning files, this discovery doc.
-- **Phase 1 — Skeleton:** backend FastAPI app + SQLite schema + settings; Next.js shell (dashboard, settings, idea form); health check; docker files optional. Verify toolchain (python, node, ollama).
+- **Phase 1 (done, pending approval):** backend FastAPI app + SQLite schema + settings + health check + research provider abstraction (Wikimedia/Wikidata/DDG) + article state machine; Next.js shell (dashboard, settings, idea form, articles/research/scheduler/publishing placeholders) with dark/light theme and loading/error/empty states. Verified toolchain (python, node; ollama not installed yet).
 - **Phase 2 — AI + Research:** Ollama client; research (Wikimedia/Wikidata/DDG) with cache; summarize stage; research review UI.
 - **Phase 3 — Generation + checks:** draft stage; SEO metadata + checks; quality/policy/repetition checks; review UI with inline editing and check panel.
 - **Phase 4 — Images:** Commons image search + attribution; image selection UI; post HTML builder.
