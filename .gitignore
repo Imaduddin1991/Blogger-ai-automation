@@ -1,0 +1,55 @@
+# --- Secrets / local state ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+oauth-token*.json
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*
+
+# --- Data / uploads ---
+data/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+uploads/
+images/
+static/generated/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- Logs ---
+logs/
+*.log
+
+# --- gstack local state ---
+~/.gstack/
