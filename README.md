@@ -47,4 +47,13 @@ research via Wikimedia/Wikidata/DuckDuckGo with topic-key caching, LLM summarize
 stage (prompt-injection hardened, graceful degradation when Ollama is offline),
 background serial worker, and working dashboard/ideas/research pages that proxy to
 the API. Backend: 46 tests. Frontend: 13 tests.
-Next: Phase 3 — article generation. See `docs/01-product-discovery.md` §13.
+
+**Phase 3 complete: generation + checks.** Full article pipeline (draft → SEO →
+checks) over the serial background worker, quality/policy/repetition checks with an
+advisory check panel, inline article editing, recheck/retry, and the articles review
+UI wired to the API. Hardened during review: LLM output is sanitized/capped at the
+DB boundary, `articles.idea_id` is unique (duplicate draft races are 409 or re-used),
+stuck `drafting` rows are retryable, and background failures are logged and persisted
+instead of hanging silently. Verified end-to-end against local Ollama (idea → research
+→ 460+ word draft → SEO metadata → 17 checks). Backend: 84 tests. Frontend: 14 tests.
+Next: Phase 4 — images. See `docs/01-product-discovery.md` §13.

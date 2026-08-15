@@ -3,6 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _here = Path(__file__).resolve().parent
@@ -23,7 +24,13 @@ class Settings(BaseSettings):
     data_dir: str = _DEFAULT_DATA_DIR
     database_url: str = f"sqlite:///{_DEFAULT_DATA_DIR}/blogger_ai.db"
 
-    ollama_url: str = "http://127.0.0.1:11434"
+    # Ollama provider endpoint. Accepts OLLAMA_BASE_URL or OLLAMA_URL from the
+    # environment so the same build works against a local or remote (e.g.
+    # Windows-hosted) Ollama without code changes. Default is localhost.
+    ollama_url: str = Field(
+        default="http://127.0.0.1:11434",
+        validation_alias=AliasChoices("OLLAMA_BASE_URL", "OLLAMA_URL", "ollama_url"),
+    )
     ollama_default_model: str = "qwen2.5:1.5b"
 
     local_auth_token: str = ""

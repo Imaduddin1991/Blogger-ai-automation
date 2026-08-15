@@ -341,8 +341,8 @@ Each phase ends with `/review` (and `/qa` once a usable app exists) before the n
 
 - **Phase 0 (done):** workspace, git init, planning files, this discovery doc.
 - **Phase 1 (done, pending approval):** backend FastAPI app + SQLite schema + settings + health check + research provider abstraction (Wikimedia/Wikidata/DDG) + article state machine; Next.js shell (dashboard, settings, idea form, articles/research/scheduler/publishing placeholders) with dark/light theme and loading/error/empty states. Verified toolchain (python, node; ollama not installed yet).
-- **Phase 2 — AI + Research:** Ollama client; research (Wikimedia/Wikidata/DDG) with cache; summarize stage; research review UI.
-- **Phase 3 — Generation + checks:** draft stage; SEO metadata + checks; quality/policy/repetition checks; review UI with inline editing and check panel.
+- **Phase 2 (done):** Ollama client; research (Wikimedia/Wikidata/DDG) with cache; summarize stage; research review UI.
+- **Phase 3 (done):** draft stage; SEO metadata + checks; quality/policy/repetition checks; review UI with inline editing and check panel. Review-hardened: LLM output sanitized/capped at the DB boundary, unique `articles.idea_id`, retryable stuck rows, background failures logged + persisted, edit-vs-worker races reduced via per-stage re-reads. Verified end-to-end on local Ollama.
 - **Phase 4 — Images:** Commons image search + attribution; image selection UI; post HTML builder.
 - **Phase 5 — Blogger:** OAuth connect flow; publish now / draft / schedule; APScheduler jobs; status tracking + sync; publish log.
 - **Phase 6 — Hardening + QA:** `/qa` full pass on the running app, `/investigate` for any bugs, security pass, README/docs, release.

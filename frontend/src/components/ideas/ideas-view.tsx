@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Lightbulb, Loader2, Plus, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { FileText, Lightbulb, Loader2, Plus, Search } from "lucide-react";
 
 import {
+  createArticleFromIdea,
   createIdea,
   getResearch,
   listIdeas,
@@ -29,7 +31,10 @@ import { LoadingState } from "@/components/states/loading-state";
 
 function IdeaCard({ idea }: { idea: Idea & { research?: Research } }) {
   const research = idea.research;
+  const router = useRouter();
   const [researching, setResearching] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
 
   const handleResearch = useCallback(async () => {
     setResearching(true);
@@ -43,6 +48,20 @@ function IdeaCard({ idea }: { idea: Idea & { research?: Research } }) {
     // refresh list so statuses update
     window.dispatchEvent(new Event("ideas-changed"));
   }, [idea]);
+
+  const handleDraft = useCallback(async () => {
+    setDrafting(true);
+    setDraftError(null);
+    try {
+      await createArticleFromIdea(idea.id);
+      router.push("/articles");
+    } catch (e) {
+      setDraftError(e instanceof Error ? e.message : String(e));
+      setDrafting(false);
+    }
+  }, [idea.id, router]);
+
+  const researchComplete = research?.status === "complete";
 
   return (
     <Card>
@@ -59,12 +78,27 @@ function IdeaCard({ idea }: { idea: Idea & { research?: Research } }) {
           </Badge>
         ) : null}
       </CardHeader>
-      <CardContent className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">{idea.created_at}</p>
-        <Button size="sm" onClick={handleResearch} disabled={researching || research?.status === "researching"}>
-          {researching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-          {research ? "Re-research" : "Research"}
-        </Button>
+      <CardContent className="space-y-2">
+        {draftError ? <p className="text-xs text-destructive">{draftError}</p> : null}
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">{idea.created_at}</p>
+          <div className="flex items-center gap-2">
+            {researchComplete ? (
+              <Button size="sm" onClick={() => void handleDraft()} disabled={drafting}>
+                {drafting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4" />
+                )}
+                Draft article
+              </Button>
+            ) : null}
+            <Button size="sm" onClick={handleResearch} disabled={researching || research?.status === "researching"}>
+              {researching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              {research ? "Re-research" : "Research"}
+            </Button>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -82,12 +116,13 @@ export function IdeasView() {
   const refresh = useCallback(async () => {
     try {
       const data = await listIdeas();
-      setIdeas((prev) =>
-        data.map((idea) => {
-          const existing = prev.find((p) => p.id === idea.id);
+      setIdeas((prev) => {
+        const byId = new Map(prev.map((p) => [p.id, p]));
+        return data.map((idea) => {
+          const existing = byId.get(idea.id);
           return existing?.research ? { ...idea, research: existing.research } : idea;
-        }),
-      );
+        });
+      });
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

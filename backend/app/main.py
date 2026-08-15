@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import dashboard, health, ideas
+from app.api import articles, dashboard, health, ideas
 from app.api import research as research_api
 from app.api import settings as settings_api
 from app.config import get_settings
@@ -27,6 +27,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(ideas.router)
     app.include_router(research_api.router)
+    app.include_router(articles.router)
     app.include_router(settings_api.router)
     app.include_router(dashboard.router)
     return app

@@ -7,10 +7,19 @@ describe("statusLabel", () => {
     expect(statusLabel("researching")).toBe("Researching…");
     expect(statusLabel("complete")).toBe("Complete");
     expect(statusLabel("error")).toBe("Error");
+    expect(statusLabel("researched")).toBe("Researched");
+  });
+
+  it("maps article pipeline statuses to friendly labels", () => {
+    expect(statusLabel("draft")).toBe("Draft");
+    expect(statusLabel("drafting")).toBe("Generating…");
+    expect(statusLabel("drafted")).toBe("Drafted");
+    expect(statusLabel("seo_done")).toBe("SEO done");
+    expect(statusLabel("checked")).toBe("Checked");
   });
 
   it("passes through unknown statuses", () => {
-    expect(statusLabel("draft")).toBe("draft");
+    expect(statusLabel("weird_state")).toBe("weird_state");
   });
 });
 

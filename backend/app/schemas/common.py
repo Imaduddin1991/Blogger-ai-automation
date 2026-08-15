@@ -82,3 +82,56 @@ class DashboardRead(BaseModel):
     research_count: int
     article_count: int
     publish_job_count: int
+
+
+class CheckResultRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    check_type: str
+    passed: bool
+    severity: str
+    message: str | None
+    details: dict | None
+
+
+class ArticleRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    idea_id: int | None
+    blog_id: int | None
+    title: str
+    slug: str | None
+    seo_title: str | None
+    meta_description: str | None
+    labels: list[str]
+    word_count: int
+    status: str
+    generation_errors: dict | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ArticleDetailRead(ArticleRead):
+    body: str | None = None
+    summary_text: str | None = None
+    idea_title: str | None = None
+    running: bool = False
+    sources: list[SourceRead] = []
+    check_results: list[CheckResultRead] = []
+
+
+class ArticleStartRead(BaseModel):
+    id: int
+    status: str
+    cached: bool
+
+
+class ArticleUpdate(BaseModel):
+    title: str | None = Field(default=None, max_length=300)
+    body: str | None = Field(default=None, max_length=200_000)
+    seo_title: str | None = Field(default=None, max_length=200)
+    meta_description: str | None = Field(default=None, max_length=2000)
+    labels: list[str] | None = None
+    slug: str | None = Field(default=None, max_length=500)

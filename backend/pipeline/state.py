@@ -32,20 +32,20 @@ ALL_STATES = {
 # Valid (from -> to) transitions. Anything not listed is impossible and is
 # rejected by transition().
 TRANSITIONS: dict[str, set[str]] = {
-    DRAFT: {RESEARCHING},
-    RESEARCHING: {RESEARCHED, DRAFT},            # success, or re-run/cancel
-    RESEARCHED: {DRAFTING, RESEARCHING},         # draft, or re-research
-    DRAFTING: {DRAFTED, RESEARCHED},             # success, or re-run/cancel
+    DRAFT: {RESEARCHING, DRAFTING},          # legacy idea flow; article start
+    RESEARCHING: {RESEARCHED, DRAFT},        # success, or re-run/cancel
+    RESEARCHED: {DRAFTING, RESEARCHING},     # draft, or re-research
+    DRAFTING: {DRAFTED, DRAFT},              # success, or fail -> retry
     DRAFTED: {SEO_DONE, DRAFTING},
     SEO_DONE: {CHECKED, DRAFTED},
-    CHECKED: {IMAGE_READY, DRAFTED},             # image step, or back to edit
+    CHECKED: {IMAGE_READY, DRAFTED},         # image step, or back to edit
     IMAGE_READY: {READY_FOR_REVIEW, DRAFTED},
-    READY_FOR_REVIEW: {APPROVED, DRAFTED},       # approve, or edit more
+    READY_FOR_REVIEW: {APPROVED, DRAFTED},   # approve, or edit more
     APPROVED: {SCHEDULED, READY_FOR_REVIEW, PUBLISHING},
-    SCHEDULED: {PUBLISHING, APPROVED},           # fire now, or reschedule
+    SCHEDULED: {PUBLISHING, APPROVED},       # fire now, or reschedule
     PUBLISHING: {PUBLISHED, PUBLISH_FAILED, APPROVED},
     PUBLISH_FAILED: {PUBLISHING, SCHEDULED, APPROVED},
-    PUBLISHED: set(),                            # terminal
+    PUBLISHED: set(),                        # terminal
 }
 
 

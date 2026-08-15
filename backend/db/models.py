@@ -102,6 +102,7 @@ class Article(Base, TimestampMixin):
     """The generated article and its lifecycle state."""
 
     __tablename__ = "articles"
+    __table_args__ = (UniqueConstraint("idea_id", name="uq_articles_idea_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     idea_id: Mapped[int | None] = mapped_column(ForeignKey("ideas.id"), nullable=True)
@@ -114,6 +115,7 @@ class Article(Base, TimestampMixin):
     labels: Mapped[list[str]] = mapped_column(JSON, default=list)
     word_count: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(30), default="draft", index=True)
+    generation_errors: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     review_approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     idea: Mapped[Idea | None] = relationship(back_populates="articles")

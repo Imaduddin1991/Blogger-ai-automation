@@ -48,7 +48,30 @@ def get_db():
         db.close()
 
 
+def _apply_sqlite_index_workarounds() -> None:
+    """Create constraints that SQLite can't add via ALTER on existing DBs.
+
+    Fresh DBs get these from Base.metadata.create_all(); older databases need
+    the same constraints applied idempotently here.
+    """
+    if not _settings.database_url.startswith("sqlite"):
+        return
+    with engine.begin() as conn:
+        dupes = conn.exec_driver_sql(
+            "SELECT COUNT(*) FROM (SELECT idea_id FROM articles "
+            "WHERE idea_id IS NOT NULL GROUP BY idea_id HAVING COUNT(*) > 1)"
+        ).scalar()
+        if dupes:
+            print("WARNING: articles has duplicate idea_id rows; skipping unique index")
+            return
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_articles_idea_id "
+            "ON articles(idea_id)"
+        )
+
+
 def init_db() -> None:
     from db import models  # noqa: F401  (register models on Base)
 
     Base.metadata.create_all(engine)
+    _apply_sqlite_index_workarounds()

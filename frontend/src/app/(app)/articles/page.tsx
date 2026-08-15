@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { FileText } from "lucide-react";
 
-import { PlaceholderPage } from "@/components/layout/placeholder-page";
+import { ArticlesView } from "@/components/articles/articles-view";
+import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata: Metadata = {
   title: "Articles",
@@ -10,12 +10,12 @@ export const metadata: Metadata = {
 
 export default function ArticlesPage() {
   return (
-    <PlaceholderPage
-      title="Articles"
-      description="Review, edit, and approve generated articles."
-      icon={FileText}
-      emptyTitle="No articles yet"
-      emptyDescription="Articles you generate from ideas will be listed here for review and approval."
-    />
+    <div className="space-y-6">
+      <PageHeader
+        title="Articles"
+        description="Review, edit, and check generated articles before approval."
+      />
+      <ArticlesView />
+    </div>
   );
 }
