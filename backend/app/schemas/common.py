@@ -136,3 +136,40 @@ class ArticleUpdate(BaseModel):
     meta_description: str | None = Field(default=None, max_length=2000)
     labels: list[str] | None = None
     slug: str | None = Field(default=None, max_length=500)
+
+
+class ImageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    article_id: int | None
+    provider: str
+    url: str
+    alt: str | None
+    caption: str | None
+    attribution: str | None
+    license: str | None
+    position: int
+    status: str
+    page_url: str | None
+    author: str | None
+    license_url: str | None
+    attribution_required: bool
+    usage_notes: str | None
+    thumb_url: str | None
+    mime: str | None
+    width: int | None
+    height: int | None
+    file_size: int | None
+    relevance: float
+    retrieved_at: datetime | None
+    rejection_reason: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ArticleImagesRead(BaseModel):
+    article_id: int
+    status: str
+    running: bool
+    images: list[ImageRead] = []

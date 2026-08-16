@@ -32,6 +32,12 @@ def reset_db():
     yield
 
 
+@pytest.fixture(autouse=True)
+def no_image_providers(monkeypatch):
+    """Keep the article job's image stage network-free (no enabled providers)."""
+    monkeypatch.setattr("pipeline.images.service.enabled_providers", lambda: [])
+
+
 def test_health_ok(client):
     data = client.get("/api/health").json()
     assert data["status"] == "ok"
@@ -256,17 +262,21 @@ def test_article_not_found(client):
     assert client.get("/api/articles/999").status_code == 404
 
 
-def _make_checked_article(client, noop_article_runner):
-    """Create an article and manually drive it to a checked state via the service."""
+def _make_image_ready_article(client, noop_article_runner=None):
+    """Create an article and manually drive it to the image_ready state.
+
+    Built via the service (not the create endpoint) so no background job is
+    queued — the article is genuinely idle for the image endpoints.
+    """
     idea = client.post("/api/ideas", json={"title": "Why solar panels work"}).json()
     _complete_research_for_idea(client, idea["id"])
-    start = client.post(f"/api/articles?idea_id={idea['id']}").json()
 
     import asyncio
 
     from db.base import engine
-    from db.models import Article
-    from pipeline.article.service import run_article_job
+    from db.models import Article, Research
+    from pipeline.article.service import create_article_from_research, run_article_job
+    from sqlalchemy import select
     from sqlalchemy.orm import Session
 
     class FakeArticleClient:
@@ -285,17 +295,20 @@ def _make_checked_article(client, noop_article_runner):
 
     session = Session(engine)
     try:
-        article = session.get(Article, start["id"])
+        research = session.scalars(
+            select(Research).where(Research.idea_id == idea["id"]).order_by(Research.id.desc()).limit(1)
+        ).one()
+        article = create_article_from_research(session, research)
         asyncio.run(run_article_job(session, article, client=FakeArticleClient()))
-        return session.get(Article, start["id"]).id
+        return article.id
     finally:
         session.close()
 
 
-def test_article_detail_shows_checked_state(client, noop_article_runner):
-    article_id = _make_checked_article(client, noop_article_runner)
+def test_article_detail_shows_image_ready_state(client, noop_article_runner):
+    article_id = _make_image_ready_article(client, noop_article_runner)
     detail = client.get(f"/api/articles/{article_id}").json()
-    assert detail["status"] == "checked"
+    assert detail["status"] == "image_ready"
     assert detail["seo_title"] == "Solar panels explained"
     assert detail["word_count"] > 0
     check_types = {c["check_type"] for c in detail["check_results"]}
@@ -303,7 +316,7 @@ def test_article_detail_shows_checked_state(client, noop_article_runner):
 
 
 def test_article_patch_content_edit_resets_and_clears_checks(client, noop_article_runner):
-    article_id = _make_checked_article(client, noop_article_runner)
+    article_id = _make_image_ready_article(client, noop_article_runner)
     patched = client.patch(f"/api/articles/{article_id}", json={"body": "## New\n\nFresh body text here."}).json()
     assert patched["status"] == "drafted"
     assert patched["check_results"] == []
@@ -312,7 +325,7 @@ def test_article_patch_content_edit_resets_and_clears_checks(client, noop_articl
 
 def test_article_patch_seo_edit_resets_and_clears_checks(client, noop_article_runner):
     """Editing SEO fields invalidates checks too (they depend on that metadata)."""
-    article_id = _make_checked_article(client, noop_article_runner)
+    article_id = _make_image_ready_article(client, noop_article_runner)
     patched = client.patch(
         f"/api/articles/{article_id}",
         json={"meta_description": "A brand new meta description."},
@@ -323,7 +336,7 @@ def test_article_patch_seo_edit_resets_and_clears_checks(client, noop_article_ru
 
 
 def test_article_approve_flow(client, noop_article_runner):
-    article_id = _make_checked_article(client, noop_article_runner)
+    article_id = _make_image_ready_article(client, noop_article_runner)
 
     ready = client.post(f"/api/articles/{article_id}/approve").json()
     assert ready["status"] == "ready_for_review"
@@ -335,7 +348,7 @@ def test_article_approve_flow(client, noop_article_runner):
 
 
 def test_article_approve_rejects_non_reviewable_state(client, noop_article_runner):
-    article_id = _make_checked_article(client, noop_article_runner)
+    article_id = _make_image_ready_article(client, noop_article_runner)
     # Reset to a state that cannot be approved.
     client.patch(f"/api/articles/{article_id}", json={"body": "## New\n\nFresh body."})
     resp = client.post(f"/api/articles/{article_id}/approve")
@@ -343,7 +356,7 @@ def test_article_approve_rejects_non_reviewable_state(client, noop_article_runne
 
 
 def test_article_recheck_queues_and_retains_body(client, noop_article_runner):
-    article_id = _make_checked_article(client, noop_article_runner)
+    article_id = _make_image_ready_article(client, noop_article_runner)
     resp = client.post(f"/api/articles/{article_id}/recheck")
     assert resp.status_code == 200
     assert resp.json()["id"] == article_id
@@ -351,7 +364,7 @@ def test_article_recheck_queues_and_retains_body(client, noop_article_runner):
 
 
 def test_article_retry_only_in_retryable_state(client, noop_article_runner):
-    article_id = _make_checked_article(client, noop_article_runner)
+    article_id = _make_image_ready_article(client, noop_article_runner)
     assert client.post(f"/api/articles/{article_id}/retry").status_code == 409
     # A fresh (draft) article IS retryable.
     idea = client.post("/api/ideas", json={"title": "Another topic"}).json()
@@ -360,3 +373,164 @@ def test_article_retry_only_in_retryable_state(client, noop_article_runner):
     retry = client.post(f"/api/articles/{start['id']}/retry")
     assert retry.status_code == 200
     assert start["id"] in noop_article_runner[0]
+
+
+# --- Image API ---------------------------------------------------------------
+
+
+def _seed_image_rows(article_id: int, **kwargs) -> dict:
+    """Insert image rows directly for the article (bypasses the search job)."""
+    from db.base import engine
+    from db.models import Image
+    from sqlalchemy.orm import Session
+
+    base = dict(
+        provider="commons",
+        url="https://upload.wikimedia.org/wikipedia/commons/a.jpg",
+        page_url="https://commons.wikimedia.org/wiki/File:Test.jpg",
+        caption="Test image",
+        license="CC0",
+        status="candidate",
+        thumb_url="https://upload.wikimedia.org/wikipedia/commons/thumb/a.jpg",
+        mime="image/jpeg",
+        width=1200,
+        height=800,
+        file_size=2048,
+        relevance=0.9,
+        rejection_reason=None,
+    )
+    base.update(kwargs)
+    session = Session(engine)
+    try:
+        row = Image(article_id=article_id, **base)
+        session.add(row)
+        session.commit()
+        return {"id": row.id, **base}
+    finally:
+        session.close()
+
+
+def test_images_list_empty(client):
+    article_id = _make_image_ready_article(client)
+    data = client.get(f"/api/articles/{article_id}/images").json()
+    assert data["article_id"] == article_id
+    assert data["status"] == "image_ready"
+    assert data["running"] is False
+    assert data["images"] == []
+
+
+def test_images_search_queues_job(client, monkeypatch):
+    article_id = _make_image_ready_article(client)
+    started: list[int] = []
+    monkeypatch.setattr("app.api.articles.start_background_images", started.append)
+
+    resp = client.post(f"/api/articles/{article_id}/images/search")
+    assert resp.status_code == 202
+    data = resp.json()
+    assert data["article_id"] == article_id
+    assert started == [article_id]
+
+
+def test_images_search_requires_searchable_state(client):
+    # A fresh article (draft) cannot be searched.
+    idea = client.post("/api/ideas", json={"title": "Draft topic"}).json()
+    _complete_research_for_idea(client, idea["id"])
+    start = client.post(f"/api/articles?idea_id={idea['id']}").json()
+    resp = client.post(f"/api/articles/{start['id']}/images/search")
+    assert resp.status_code == 409
+
+
+def test_images_search_rejects_second_job(client, monkeypatch):
+    article_id = _make_image_ready_article(client)
+    monkeypatch.setattr("app.api.articles.start_background_images", lambda _id: None)
+    monkeypatch.setattr("app.api.articles.is_running", lambda _id: True)  # job in flight
+
+    resp = client.post(f"/api/articles/{article_id}/images/search")
+    assert resp.status_code == 409
+
+
+def test_images_retry_queues_job(client, monkeypatch):
+    article_id = _make_image_ready_article(client)
+    started: list[int] = []
+    monkeypatch.setattr("app.api.articles.start_background_images", started.append)
+    resp = client.post(f"/api/articles/{article_id}/images/retry")
+    assert resp.status_code == 202
+    assert started == [article_id]
+
+
+def test_images_select_sets_selected_and_does_not_approve(client):
+    article_id = _make_image_ready_article(client)
+    row = _seed_image_rows(article_id)
+
+    resp = client.post(f"/api/articles/{article_id}/images/{row['id']}/select")
+    assert resp.status_code == 200
+    images = resp.json()["images"]
+    assert images[0]["status"] == "selected"
+
+    # Selection is NOT approval: the article still needs the review gate.
+    detail = client.get(f"/api/articles/{article_id}").json()
+    assert detail["status"] == "image_ready"
+    ready = client.post(f"/api/articles/{article_id}/approve").json()
+    assert ready["status"] == "ready_for_review"
+    approved = client.post(f"/api/articles/{article_id}/approve").json()
+    assert approved["status"] == "approved"
+
+
+def test_images_select_requires_article_ownership(client):
+    article_a = _make_image_ready_article(client)
+    idea = client.post("/api/ideas", json={"title": "Second article"}).json()
+    _complete_research_for_idea(client, idea["id"])
+    start_b = client.post(f"/api/articles?idea_id={idea['id']}").json()
+    row = _seed_image_rows(article_a)
+
+    # Selecting article A's image via article B's endpoint must fail.
+    resp = client.post(f"/api/articles/{start_b['id']}/images/{row['id']}/select")
+    assert resp.status_code == 404
+
+
+def test_images_select_rejects_rejected_image(client):
+    article_id = _make_image_ready_article(client)
+    row = _seed_image_rows(article_id, status="rejected", rejection_reason="license not allowed: CC BY-NC 4.0")
+    resp = client.post(f"/api/articles/{article_id}/images/{row['id']}/select")
+    assert resp.status_code == 409
+    assert "rejected" in resp.json()["detail"]
+
+
+def test_images_remove_deletes_row(client):
+    article_id = _make_image_ready_article(client)
+    row = _seed_image_rows(article_id)
+    resp = client.delete(f"/api/articles/{article_id}/images/{row['id']}")
+    assert resp.status_code == 200
+    assert resp.json()["images"] == []
+
+
+def test_images_remove_requires_ownership(client):
+    article_a = _make_image_ready_article(client)
+    idea = client.post("/api/ideas", json={"title": "Second article"}).json()
+    _complete_research_for_idea(client, idea["id"])
+    start_b = client.post(f"/api/articles?idea_id={idea['id']}").json()
+    row = _seed_image_rows(article_a)
+    resp = client.delete(f"/api/articles/{start_b['id']}/images/{row['id']}")
+    assert resp.status_code == 404
+
+
+def test_images_queued_job_noops_after_edit(client, noop_article_runner):
+    """A manual image job that starts late after an edit must not clobber it."""
+    import asyncio
+
+    from services.article_runner import _run_images
+
+    article_id = _make_image_ready_article(client)
+    client.patch(
+        f"/api/articles/{article_id}", json={"body": "## New\n\nEdited while queued."}
+    )
+    assert client.get(f"/api/articles/{article_id}").json()["status"] == "drafted"
+
+    # The queued manual job starts after the edit: it must be a no-op, not a
+    # re-draft. (The mid-search interleaving is covered in test_images_service.)
+    asyncio.run(_run_images(article_id))
+
+    detail = client.get(f"/api/articles/{article_id}").json()
+    assert detail["status"] == "drafted"
+    assert detail["body"] == "## New\n\nEdited while queued."
+    assert client.get(f"/api/articles/{article_id}/images").json()["images"] == []

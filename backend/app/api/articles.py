@@ -12,13 +12,15 @@ from sqlalchemy.orm import Session
 from app.deps import require_local_token
 from app.schemas.common import (
     ArticleDetailRead,
+    ArticleImagesRead,
     ArticleRead,
     ArticleStartRead,
     ArticleUpdate,
 )
 from db.base import get_db
-from db.models import Article, CheckResult, Research
+from db.models import Article, CheckResult, Image, Research
 from pipeline.article.service import approve_article, create_article_from_research
+from pipeline.images.status import IMAGE_STATUS_REJECTED, IMAGE_STATUS_SELECTED
 from pipeline.research.service import STATUS_COMPLETE
 from pipeline.state import (
     APPROVED,
@@ -26,6 +28,7 @@ from pipeline.state import (
     DRAFT,
     DRAFTED,
     DRAFTING,
+    IMAGES_SEARCHING,
     IMAGE_READY,
     READY_FOR_REVIEW,
     SEO_DONE,
@@ -34,6 +37,7 @@ from services.article_runner import (
     ensure_running,
     is_running,
     start_background_article,
+    start_background_images,
     start_background_recheck,
 )
 
@@ -113,6 +117,9 @@ def get_article(article_id: int, db: Session = Depends(get_db)) -> ArticleDetail
     # pattern as research rows), so it is never stuck behind a permanent spinner.
     if article.status == DRAFTING and not is_running(article_id):
         ensure_running(article_id)
+    if article.status == IMAGES_SEARCHING and not is_running(article_id):
+        # Lazy-resume a search left stuck by a crashed process.
+        start_background_images(article_id)
     research = _with_research(db, article)
     return ArticleDetailRead.model_validate(article).model_copy(
         update={
@@ -158,6 +165,7 @@ def update_article(
     if content_edited and article.status in (
         SEO_DONE,
         CHECKED,
+        IMAGES_SEARCHING,
         IMAGE_READY,
         READY_FOR_REVIEW,
         APPROVED,
@@ -201,3 +209,99 @@ def retry_article(article_id: int, db: Session = Depends(get_db)) -> ArticleStar
         raise HTTPException(status_code=409, detail="Article is not in a retryable state.")
     start_background_article(article.id)
     return _start_read(article)
+
+
+# --- Images ------------------------------------------------------------------
+
+
+def _images_read(db: Session, article: Article) -> ArticleImagesRead:
+    images = list(
+        db.scalars(
+            select(Image).where(Image.article_id == article.id).order_by(Image.id)
+        ).all()
+    )
+    return ArticleImagesRead(
+        article_id=article.id,
+        status=article.status,
+        running=is_running(article.id),
+        images=images,
+    )
+
+
+def _assert_searchable(db: Session, article: Article) -> None:
+    """Images may only be searched from checked / image_ready, one job at a time."""
+    if article.status == IMAGES_SEARCHING or is_running(article.id):
+        raise HTTPException(status_code=409, detail="A pipeline job for this article is already running.")
+    if article.status not in (CHECKED, IMAGE_READY):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Images cannot be searched from status '{article.status}'",
+        )
+
+
+@router.get("/{article_id}/images", response_model=ArticleImagesRead)
+def list_images(article_id: int, db: Session = Depends(get_db)) -> ArticleImagesRead:
+    """List the article's image candidates/selection and the search status."""
+    article = _get(db, article_id)
+    return _images_read(db, article)
+
+
+@router.post("/{article_id}/images/search", response_model=ArticleImagesRead, status_code=202)
+def search_images(article_id: int, db: Session = Depends(get_db)) -> ArticleImagesRead:
+    """Queue an image search (async). Returns the current image state."""
+    article = _get(db, article_id)
+    _assert_searchable(db, article)
+    start_background_images(article.id)
+    return _images_read(db, article)
+
+
+@router.post("/{article_id}/images/retry", response_model=ArticleImagesRead, status_code=202)
+def retry_images(article_id: int, db: Session = Depends(get_db)) -> ArticleImagesRead:
+    """Re-queue a failed image search (alias of search for the retry UI)."""
+    article = _get(db, article_id)
+    _assert_searchable(db, article)
+    start_background_images(article.id)
+    return _images_read(db, article)
+
+
+def _owned_image(db: Session, article: Article, image_id: int) -> Image:
+    image = db.get(Image, image_id)
+    if image is None or image.article_id != article.id:
+        raise HTTPException(status_code=404, detail="Image not found for this article")
+    return image
+
+
+@router.post("/{article_id}/images/{image_id}/select", response_model=ArticleImagesRead)
+def select_image(
+    article_id: int, image_id: int, db: Session = Depends(get_db)
+) -> ArticleImagesRead:
+    """Select a candidate/suggested image. Never approves the article."""
+    article = _get(db, article_id)
+    image = _owned_image(db, article, image_id)
+    if article.status == IMAGES_SEARCHING or is_running(article.id):
+        raise HTTPException(
+            status_code=409, detail="Image selection is unavailable while a search is running."
+        )
+    if image.status == IMAGE_STATUS_REJECTED:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This image was rejected and cannot be selected: {image.rejection_reason or 'rejected'}",
+        )
+    if image.status != IMAGE_STATUS_SELECTED:
+        image.status = IMAGE_STATUS_SELECTED
+        db.commit()
+    return _images_read(db, article)
+
+
+@router.delete("/{article_id}/images/{image_id}", response_model=ArticleImagesRead)
+def remove_image(article_id: int, image_id: int, db: Session = Depends(get_db)) -> ArticleImagesRead:
+    """Remove an image from the article entirely."""
+    article = _get(db, article_id)
+    image = _owned_image(db, article, image_id)
+    if article.status == IMAGES_SEARCHING or is_running(article.id):
+        raise HTTPException(
+            status_code=409, detail="Images cannot be modified while a search is running."
+        )
+    db.delete(image)
+    db.commit()
+    return _images_read(db, article)

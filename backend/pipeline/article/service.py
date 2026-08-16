@@ -9,6 +9,7 @@ deterministic fallback; checks are rule-based and always run.
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime, timezone
 
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Session, selectinload
 from db.models import Article, CheckResult, Idea, Research
 from pipeline.checks import run_all_checks
 from pipeline.draft import ArticleDraft, count_words, generate_draft
+from pipeline.images.service import run_images_job
 from pipeline.research.providers.base import Source
 from pipeline.seo import build_slug, generate_seo_metadata
 from pipeline.state import (
@@ -26,12 +28,15 @@ from pipeline.state import (
     DRAFT,
     DRAFTED,
     DRAFTING,
+    IMAGES_SEARCHING,
     IMAGE_READY,
     READY_FOR_REVIEW,
     SEO_DONE,
     transition,
 )
 from services.ollama_client import OllamaClient, OllamaUnavailableError
+
+logger = logging.getLogger(__name__)
 
 # Mirrors the ArticleUpdate API schema limits so LLM output is constrained at
 # the same boundary the UI is. Keeps a poisoned/model output from persisting
@@ -193,8 +198,35 @@ def _checks_stage(db: Session, article: Article) -> None:
     db.commit()
 
 
+async def _images_stage(db: Session, article: Article) -> None:
+    """Last step of the article job: image search, optional and never fatal.
+
+    `run_images_job` already handles provider failure by returning to CHECKED
+    with a recorded error. Anything else unexpected is contained here so a
+    broken image stage can never take down the article pipeline. A user edit
+    that landed mid-flight (status no longer images_searching in the DB) is
+    never clobbered.
+    """
+    try:
+        await run_images_job(db, article)
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Image stage failed for article %s", article.id)
+        errors = dict(article.generation_errors or {})
+        errors["images"] = f"image search failed: {type(exc).__name__}: {exc}"
+        article.generation_errors = errors
+        db.execute(
+            select(Article)
+            .where(Article.id == article.id)
+            .execution_options(populate_existing=True)
+        ).scalar_one()
+        if article.status == IMAGES_SEARCHING:
+            article.status = transition(article.status, CHECKED)
+        db.commit()
+
+
 async def run_article_job(db: Session, article: Article, *, client=None) -> Article:
-    """Run draft -> SEO -> checks for an article. Returns the article."""
+    """Run draft -> SEO -> checks -> images for an article. Returns the article."""
     if article.status == DRAFTING:
         # Stuck in-flight row from a crashed process; retry re-runs from scratch.
         article.status = DRAFT
@@ -209,13 +241,17 @@ async def run_article_job(db: Session, article: Article, *, client=None) -> Arti
 
     await _seo_stage(db, article, client)
     _checks_stage(db, article)
+    await _images_stage(db, article)
     return _with_detail(db, article)
 
 
 async def recheck_article(db: Session, article: Article, *, client=None) -> Article:
     """Re-run SEO + checks after edits (idempotent, no draft regeneration)."""
     client = client or OllamaClient()
-    if article.status in (SEO_DONE, CHECKED, DRAFTED, IMAGE_READY, READY_FOR_REVIEW, APPROVED):
+    if article.status in (
+        SEO_DONE, CHECKED, DRAFTED, IMAGES_SEARCHING, IMAGE_READY,
+        READY_FOR_REVIEW, APPROVED,
+    ):
         article.status = DRAFTED
         db.commit()
     await _seo_stage(db, article, client)
@@ -224,19 +260,20 @@ async def recheck_article(db: Session, article: Article, *, client=None) -> Arti
 
 
 def approve_article(db: Session, article: Article) -> Article:
-    """Human approval gate: checked/article-ready -> ready_for_review -> approved.
+    """Human approval gate: checked/image_ready -> ready_for_review -> approved.
 
     Records `review_approved_at` on first approval. Phase 5 will require
-    `approved` before any publish job is created.
+    `approved` before any publish job is created. Selecting images never
+    bypasses this gate.
     """
     db.refresh(article)
     if article.status == APPROVED:
         return _with_detail(db, article)  # already approved; idempotent
-    if article.status not in (CHECKED, READY_FOR_REVIEW):
+    if article.status not in (CHECKED, IMAGE_READY, READY_FOR_REVIEW):
         raise ValueError(
             f"Article cannot be approved from status '{article.status}'"
         )
-    if article.status == CHECKED:
+    if article.status in (CHECKED, IMAGE_READY):
         article.status = transition(article.status, READY_FOR_REVIEW)
     else:
         article.status = transition(article.status, APPROVED)

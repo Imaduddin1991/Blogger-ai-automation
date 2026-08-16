@@ -15,6 +15,7 @@ DRAFTING = "drafting"
 DRAFTED = "drafted"
 SEO_DONE = "seo_done"
 CHECKED = "checked"
+IMAGES_SEARCHING = "images_searching"
 IMAGE_READY = "image_ready"
 READY_FOR_REVIEW = "ready_for_review"
 APPROVED = "approved"
@@ -25,8 +26,8 @@ PUBLISH_FAILED = "publish_failed"
 
 ALL_STATES = {
     DRAFT, RESEARCHING, RESEARCHED, DRAFTING, DRAFTED, SEO_DONE, CHECKED,
-    IMAGE_READY, READY_FOR_REVIEW, APPROVED, SCHEDULED, PUBLISHING, PUBLISHED,
-    PUBLISH_FAILED,
+    IMAGES_SEARCHING, IMAGE_READY, READY_FOR_REVIEW, APPROVED, SCHEDULED,
+    PUBLISHING, PUBLISHED, PUBLISH_FAILED,
 }
 
 # Valid (from -> to) transitions. Anything not listed is impossible and is
@@ -38,8 +39,9 @@ TRANSITIONS: dict[str, set[str]] = {
     DRAFTING: {DRAFTED, DRAFT},              # success, or fail -> retry
     DRAFTED: {SEO_DONE, DRAFTING},
     SEO_DONE: {CHECKED, DRAFTED},
-    CHECKED: {IMAGE_READY, READY_FOR_REVIEW, DRAFTED},  # image step, approve, or back to edit
-    IMAGE_READY: {READY_FOR_REVIEW, DRAFTED},
+    CHECKED: {IMAGES_SEARCHING, READY_FOR_REVIEW, DRAFTED},  # image step, skip images, or back to edit
+    IMAGES_SEARCHING: {IMAGE_READY, CHECKED},                # done (0..N images), or provider failure
+    IMAGE_READY: {READY_FOR_REVIEW, DRAFTED, IMAGES_SEARCHING},  # review, edit, or re-search
     READY_FOR_REVIEW: {APPROVED, DRAFTED},   # approve, or edit more
     APPROVED: {SCHEDULED, READY_FOR_REVIEW, PUBLISHING},
     SCHEDULED: {PUBLISHING, APPROVED},       # fire now, or reschedule
