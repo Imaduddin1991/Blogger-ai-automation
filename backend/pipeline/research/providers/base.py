@@ -9,9 +9,44 @@ change.
 from __future__ import annotations
 
 import abc
+import re
 from dataclasses import dataclass, field
 
 import httpx
+
+# Relevance floor: sources sharing no meaningful token with the topic are
+# dropped (e.g. an unrelated "Katy Perry" page returned for a cats query).
+MIN_RELEVANCE = 0.2
+
+
+def _content_words(text: str) -> set[str]:
+    return {w.lower() for w in re.findall(r"[a-zA-Z0-9]{3,}", text or "")}
+
+
+def _word_matches(a: str, b: str) -> bool:
+    """True if two words are equal or share a ≥4-char stem."""
+    a, b = a.lower(), b.lower()
+    if a == b:
+        return True
+    return len(a) >= 4 and len(b) >= 4 and (a.startswith(b[:4]) or b.startswith(a[:4]))
+
+
+def compute_relevance(topic: str, title: str, snippet: str | None) -> float:
+    """Topic-overlap relevance (0..1) shared by all free providers.
+
+    Deterministic and cheap: the fraction of significant topic words that
+    appear (as a word or 4-char stem) in the source title/snippet. This
+    replaces per-provider guesses (e.g. "1.0 whenever a description exists")
+    that let irrelevant sources into the summary and article citations.
+    """
+    topic_words = _content_words(topic)
+    if not topic_words:
+        return 0.5  # can't judge; treat as neutral
+    text_words = _content_words(f"{title} {snippet or ''}")
+    if not text_words:
+        return 0.0
+    hits = sum(1 for tw in topic_words if any(_word_matches(tw, w) for w in text_words))
+    return round(hits / len(topic_words), 2)
 
 
 @dataclass

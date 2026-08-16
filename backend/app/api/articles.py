@@ -18,7 +18,7 @@ from app.schemas.common import (
 )
 from db.base import get_db
 from db.models import Article, CheckResult, Research
-from pipeline.article.service import create_article_from_research
+from pipeline.article.service import approve_article, create_article_from_research
 from pipeline.research.service import STATUS_COMPLETE
 from pipeline.state import (
     APPROVED,
@@ -30,7 +30,12 @@ from pipeline.state import (
     READY_FOR_REVIEW,
     SEO_DONE,
 )
-from services.article_runner import is_running, start_background_article, start_background_recheck
+from services.article_runner import (
+    ensure_running,
+    is_running,
+    start_background_article,
+    start_background_recheck,
+)
 
 router = APIRouter(prefix="/api/articles", tags=["articles"], dependencies=[Depends(require_local_token)])
 
@@ -104,6 +109,10 @@ def list_articles(db: Session = Depends(get_db)) -> list[Article]:
 @router.get("/{article_id}", response_model=ArticleDetailRead)
 def get_article(article_id: int, db: Session = Depends(get_db)) -> ArticleDetailRead:
     article = _get(db, article_id)
+    # Lazy-resume a row left stuck in `drafting` by a crashed process (same
+    # pattern as research rows), so it is never stuck behind a permanent spinner.
+    if article.status == DRAFTING and not is_running(article_id):
+        ensure_running(article_id)
     research = _with_research(db, article)
     return ArticleDetailRead.model_validate(article).model_copy(
         update={
@@ -119,7 +128,7 @@ def get_article(article_id: int, db: Session = Depends(get_db)) -> ArticleDetail
 def update_article(
     article_id: int, payload: ArticleUpdate, db: Session = Depends(get_db)
 ) -> ArticleDetailRead:
-    """Inline edit: persist content changes. Content edits reset later stages."""
+    """Inline edit: persist content changes. Edits that affect checks reset later stages."""
     article = _get(db, article_id)
 
     content_edited = False
@@ -131,12 +140,15 @@ def update_article(
         content_edited = True
     if payload.seo_title is not None:
         article.seo_title = payload.seo_title
+        content_edited = True
     if payload.meta_description is not None:
         article.meta_description = payload.meta_description
+        content_edited = True
     if payload.labels is not None:
         article.labels = payload.labels
     if payload.slug is not None:
         article.slug = payload.slug
+        content_edited = True
 
     if content_edited and article.body:
         from pipeline.draft import count_words
@@ -163,6 +175,21 @@ def recheck_article_endpoint(article_id: int, db: Session = Depends(get_db)) -> 
     if not article.body:
         raise HTTPException(status_code=409, detail="No article content to check yet.")
     start_background_recheck(article_id)
+    return get_article(article_id, db)
+
+
+@router.post("/{article_id}/approve", response_model=ArticleDetailRead)
+def approve_article_endpoint(article_id: int, db: Session = Depends(get_db)) -> ArticleDetailRead:
+    """Human approval gate: checked -> ready_for_review -> approved.
+
+    Records review_approved_at on approval. Publishing (Phase 5) requires the
+    approved state; this is the product's human-review checkpoint.
+    """
+    article = _get(db, article_id)
+    try:
+        approve_article(db, article)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return get_article(article_id, db)
 
 

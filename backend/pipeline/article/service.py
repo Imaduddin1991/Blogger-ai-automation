@@ -10,6 +10,7 @@ deterministic fallback; checks are rule-based and always run.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -219,6 +220,28 @@ async def recheck_article(db: Session, article: Article, *, client=None) -> Arti
         db.commit()
     await _seo_stage(db, article, client)
     _checks_stage(db, article)
+    return _with_detail(db, article)
+
+
+def approve_article(db: Session, article: Article) -> Article:
+    """Human approval gate: checked/article-ready -> ready_for_review -> approved.
+
+    Records `review_approved_at` on first approval. Phase 5 will require
+    `approved` before any publish job is created.
+    """
+    db.refresh(article)
+    if article.status == APPROVED:
+        return _with_detail(db, article)  # already approved; idempotent
+    if article.status not in (CHECKED, READY_FOR_REVIEW):
+        raise ValueError(
+            f"Article cannot be approved from status '{article.status}'"
+        )
+    if article.status == CHECKED:
+        article.status = transition(article.status, READY_FOR_REVIEW)
+    else:
+        article.status = transition(article.status, APPROVED)
+        article.review_approved_at = datetime.now(timezone.utc)
+    db.commit()
     return _with_detail(db, article)
 
 

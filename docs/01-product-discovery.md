@@ -52,7 +52,7 @@
 
 **AI requirements (discovery item 10):**
 - Ollama is the only AI provider. Optional later: a per-task "provider" switch (e.g. free OpenAI trial) — deferred, never mandatory.
-- Default model 3-4B (qwen2.5:3b class). Drafting may use a larger model if the user sets one.
+- Default model 1.5B (qwen2.5:1.5b, configurable). Drafting may use a larger model if the user sets one.
 - Tasks: research summarization, article drafting, SEO metadata, checks (policy, quality, repetition), image search query generation, title variants.
 - Streaming generation where the UI can show progress; cancel support.
 - Deterministic structured output where possible (JSON with strict schema for SEO meta; the rest as prose with a parsing fallback).
@@ -327,12 +327,12 @@ No credentials are ever committed. OAuth secrets and tokens live only in local s
 
 ## 12. Performance considerations for low-resource hardware (8 GB RAM, i5-6500, CPU-only)
 
-- **Ollama:** default 3-4B model (qwen2.5:3b class). One model loaded at a time (`OLLAMA_KEEP_ALIVE` tuned); pipeline runs serially (concurrency = 1). Drafting on a larger model is user-optional, expected slow (minutes), UI must be async/progress-aware.
+- **Ollama:** default 1.5B model (qwen2.5:1.5b) — the largest model this hardware sustains end-to-end (a 4B model exhausts RAM and never completes a draft). One model loaded at a time (`OLLAMA_KEEP_ALIVE` tuned); pipeline runs serially (concurrency = 1). Drafting on a larger model is user-optional, expected slow (minutes), UI must be async/progress-aware.
 - **SQLite WAL** + minimal indexes on `Article.status`, `PublishJob.run_at`. No heavy ORM overhead at this scale.
 - **Research cache** by topic hash avoids repeat network + LLM cost.
 - **No heavy NLP** (no spaCy/torch outside Ollama). Checks use regex/rules + small LLM calls.
 - **Frontend:** lean Tailwind/shadcn; no heavy chart libs; static generation where possible; Next dev server on `--turbo` or built static served by FastAPI in prod.
-- **Memory budget (estimated):** backend ~200 MB, Next dev ~500 MB, Ollama 3B ~2-3 GB, OS + browser rest. Fits 8 GB. Watchdog logs RAM if Ollama is forced to swap.
+- **Memory budget (estimated):** backend ~200 MB, Next dev ~500 MB, Ollama 1.5B ~1.5-2 GB, OS + browser rest. Fits 8 GB. A 4B model (e.g. qwen3:4b) does not fit: it swaps, starves RAM, and never completes a draft. Watchdog logs RAM if Ollama is forced to swap.
 - **Resumability:** every stage persists; a failed long generation can be retried without losing earlier stages.
 
 ## 13. Proposed development phases
@@ -346,6 +346,12 @@ Each phase ends with `/review` (and `/qa` once a usable app exists) before the n
 - **Phase 4 — Images:** Commons image search + attribution; image selection UI; post HTML builder.
 - **Phase 5 — Blogger:** OAuth connect flow; publish now / draft / schedule; APScheduler jobs; status tracking + sync; publish log.
 - **Phase 6 — Hardening + QA:** `/qa` full pass on the running app, `/investigate` for any bugs, security pass, README/docs, release.
+
+---
+
+## Known limitations
+
+- **Claim-level source contradiction is not auto-detected.** The check suite is deterministic and rule-based by design (no per-claim LLM calls, no heavy NLP, per project constraints). It cannot reliably tell "lions and tigers cannot purr" from "lions and tigers can purr" — the two sentences share the same vocabulary, so any keyword/regex detector would be a fragile heuristic giving false confidence. Research-stage relevance filtering instead drops only *off-topic* sources (a "Katy Perry" result for a cats query), never dissenting-but-relevant ones, so contradictory evidence stays visible to the human reviewer. The mandatory human approve gate (`checked -> ready_for_review -> approved`), required before any publish job (Phase 5), is the product's fact-verification checkpoint. Checks are warnings, not guarantees.
 
 ---
 

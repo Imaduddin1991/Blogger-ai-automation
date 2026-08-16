@@ -310,10 +310,36 @@ def test_article_patch_content_edit_resets_and_clears_checks(client, noop_articl
     assert patched["word_count"] == 5
 
 
-def test_article_patch_seo_only_keeps_status(client, noop_article_runner):
+def test_article_patch_seo_edit_resets_and_clears_checks(client, noop_article_runner):
+    """Editing SEO fields invalidates checks too (they depend on that metadata)."""
     article_id = _make_checked_article(client, noop_article_runner)
-    patched = client.patch(f"/api/articles/{article_id}", json={"meta_description": "A new meta description."}).json()
-    assert patched["status"] == "checked"
+    patched = client.patch(
+        f"/api/articles/{article_id}",
+        json={"meta_description": "A brand new meta description."},
+    ).json()
+    assert patched["status"] == "drafted"
+    assert patched["check_results"] == []
+    assert patched["meta_description"] == "A brand new meta description."
+
+
+def test_article_approve_flow(client, noop_article_runner):
+    article_id = _make_checked_article(client, noop_article_runner)
+
+    ready = client.post(f"/api/articles/{article_id}/approve").json()
+    assert ready["status"] == "ready_for_review"
+    assert ready["review_approved_at"] is None
+
+    approved = client.post(f"/api/articles/{article_id}/approve").json()
+    assert approved["status"] == "approved"
+    assert approved["review_approved_at"] is not None
+
+
+def test_article_approve_rejects_non_reviewable_state(client, noop_article_runner):
+    article_id = _make_checked_article(client, noop_article_runner)
+    # Reset to a state that cannot be approved.
+    client.patch(f"/api/articles/{article_id}", json={"body": "## New\n\nFresh body."})
+    resp = client.post(f"/api/articles/{article_id}/approve")
+    assert resp.status_code == 409
 
 
 def test_article_recheck_queues_and_retains_body(client, noop_article_runner):

@@ -128,3 +128,47 @@
     @apply font-sans;
   }
 }
+@layer components {
+  .markdown-preview {
+    @apply text-sm leading-relaxed;
+  }
+  .markdown-preview p {
+    @apply mb-3;
+  }
+  .markdown-preview h1,
+  .markdown-preview h2,
+  .markdown-preview h3,
+  .markdown-preview h4 {
+    @apply mb-2 mt-4 font-semibold leading-tight text-foreground;
+  }
+  .markdown-preview h1 {
+    @apply text-xl;
+  }
+  .markdown-preview h2 {
+    @apply text-lg;
+  }
+  .markdown-preview h3 {
+    @apply text-base;
+  }
+  .markdown-preview h4 {
+    @apply text-sm;
+  }
+  .markdown-preview ul {
+    @apply mb-3 list-disc space-y-1 pl-6;
+  }
+  .markdown-preview blockquote {
+    @apply mb-3 border-l-2 border-border pl-4 text-muted-foreground;
+  }
+  .markdown-preview code {
+    @apply rounded bg-muted px-1 py-0.5 font-mono text-[0.85em];
+  }
+  .markdown-preview pre {
+    @apply mb-3 overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs;
+  }
+  .markdown-preview pre code {
+    @apply bg-transparent p-0;
+  }
+  .markdown-preview a {
+    @apply text-primary underline underline-offset-2;
+  }
+}

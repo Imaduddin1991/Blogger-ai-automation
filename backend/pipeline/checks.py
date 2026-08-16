@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from collections import Counter
 
+from pipeline.draft import count_words
+
 MIN_WORDS = 300
 MIN_PARAGRAPHS = 3
 
@@ -39,8 +41,7 @@ def _paragraphs(body: str) -> list[str]:
 
 def quality_checks(body: str) -> list[dict]:
     checks: list[dict] = []
-    text = _text_without_markdown(body)
-    word_count = len([w for w in text.split() if w])
+    word_count = count_words(body)
     paragraphs = _paragraphs(body)
     headings = [l for l in (body or "").splitlines() if re.match(r"^#{1,6}\s+\S+", l.strip())]
 

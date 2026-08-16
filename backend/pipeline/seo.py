@@ -14,6 +14,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
+from pipeline.draft import count_words
 from services.ollama_client import OllamaUnavailableError, OllamaResponseError
 
 MAX_SEO_TITLE = 60
@@ -23,6 +24,23 @@ MAX_LABEL_LENGTH = 50
 DEFAULT_TARGET_WORD_COUNT = 1000
 WORD_COUNT_MIN = 0.6
 WORD_COUNT_MAX = 1.4
+
+# Words that are fine in an SEO title even when they don't appear verbatim in
+# the article (connectors and common SEO phrasing). Used by the coherence
+# check so a title like "Solar panels for beginners" isn't flagged.
+_SEO_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in",
+    "is", "it", "of", "on", "or", "that", "the", "to", "with", "this",
+    "your", "you", "its", "their", "them",
+}
+_SEO_GENERIC_WORDS = {
+    "how", "why", "what", "when", "where", "guide", "guides", "tips",
+    "best", "top", "ultimate", "complete", "essential", "simple", "easy",
+    "beginner", "beginners", "learn", "explained", "explaining", "overview",
+    "basics", "deep", "dive", "full", "new", "today", "now", "must",
+    "ways", "way", "thing", "things", "everything", "nothing", "something",
+    "better", "good", "great", "perfect", "need", "wants", "want",
+}
 
 SEO_SYSTEM_PROMPT = (
     "You generate SEO metadata for a blog article. Return ONLY a JSON object "
@@ -52,6 +70,29 @@ def build_slug(title: str) -> str:
     return "-".join(words)
 
 
+def _truncate_with_ellipsis(text: str, max_len: int) -> str:
+    """Truncate to max_len, never mid-word; end at a sentence boundary when possible.
+
+    Produces a clean snippet for search-result display: cuts at the last
+    sentence-ending punctuation (or word boundary) inside the limit and appends
+    an ellipsis, so the stored value is never a dangling half-word.
+    """
+    text = (text or "").strip()
+    if len(text) <= max_len:
+        return text
+    window = text[: max_len - 1]
+    # Prefer the last sentence boundary (". ", "! ", "? ") inside the window.
+    last_end = -1
+    for m in re.finditer(r"[.!?](?=\s)", window):
+        last_end = m.start() + 1
+    if last_end > 0:
+        return window[: last_end + 1].rstrip() + "…"
+    # No sentence boundary: cut at the last word boundary instead.
+    space = window.rfind(" ")
+    cut = space if space > 0 else len(window)
+    return window[:cut].rstrip() + "…"
+
+
 def _first_paragraph(markdown: str) -> str:
     for block in re.split(r"\n\s*\n", markdown or ""):
         if re.match(r"^\s*#{1,6}\s+\S+", block):
@@ -66,10 +107,10 @@ def fallback_metadata(title: str, body: str) -> SeoMetadata:
     """Deterministic metadata used when Ollama is unavailable."""
     seo_title = (title or "").strip()
     if len(seo_title) > MAX_SEO_TITLE:
-        seo_title = seo_title[: MAX_SEO_TITLE - 1].rstrip() + "…"
+        seo_title = _truncate_with_ellipsis(seo_title, MAX_SEO_TITLE)
     description = _first_paragraph(body).strip()
     if len(description) > MAX_META_DESCRIPTION:
-        description = description[: MAX_META_DESCRIPTION - 1].rstrip() + "…"
+        description = _truncate_with_ellipsis(description, MAX_META_DESCRIPTION)
     words = [w for w in re.findall(r"[a-zA-Z0-9]+", (title or "").lower()) if len(w) > 2]
     labels = words[:5] if words else []
     return SeoMetadata(seo_title=seo_title, meta_description=description, labels=labels)
@@ -101,8 +142,8 @@ def parse_seo_json(text: str, fallback: SeoMetadata) -> SeoMetadata:
     else:
         labels = fallback.labels
     return SeoMetadata(
-        seo_title=seo_title[:MAX_SEO_TITLE],
-        meta_description=meta[:MAX_META_DESCRIPTION],
+        seo_title=_truncate_with_ellipsis(seo_title, MAX_SEO_TITLE),
+        meta_description=_truncate_with_ellipsis(meta, MAX_META_DESCRIPTION),
         labels=labels[:MAX_LABELS],
     )
 
@@ -136,7 +177,14 @@ async def generate_seo_metadata(
             options={"temperature": 0.3, "num_ctx": 4096},
             timeout=timeout,
         )
-        return parse_seo_json(text, fallback)
+        parsed = parse_seo_json(text, fallback)
+        # Reject metadata that drifts off-topic (hallucinated title, or a
+        # description disconnected from the article) and use the deterministic
+        # fallback instead, so wrong metadata is never trusted silently.
+        title_ok, _ = _seo_title_coherent(parsed.seo_title, title, topic, body)
+        if title_ok and _meta_connected(parsed.meta_description, title, topic, body):
+            return parsed
+        return fallback
     except (OllamaUnavailableError, OllamaResponseError):
         return fallback
 
@@ -144,6 +192,42 @@ async def generate_seo_metadata(
 def _keyword_variants(topic: str) -> list[str]:
     words = [w.lower() for w in re.findall(r"[a-zA-Z]+", topic or "") if len(w) > 2]
     return list(dict.fromkeys(words))
+
+
+def _content_words(text: str) -> set[str]:
+    """Significant words only (stopwords/generic SEO words removed)."""
+    words = {w.lower() for w in re.findall(r"[a-zA-Z0-9]{3,}", text or "")}
+    return words - _SEO_STOPWORDS - _SEO_GENERIC_WORDS
+
+
+def _seo_title_coherent(
+    seo_title: str, title: str, topic: str, body: str
+) -> tuple[bool, list[str]]:
+    """Check the SEO title is grounded in the article.
+
+    Returns (passed, unknown_words). A title that shares no significant word
+    with the title/topic, or that appends many words absent from the article
+    (e.g. "…Exploring the Mysteries of the Cat's Flu"), is flagged so a
+    hallucinated title can never sail through the checks green.
+    """
+    title_words = _content_words(seo_title)
+    if not title_words:
+        return True, []
+    anchor = _content_words(f"{title} {topic}")
+    vocab = anchor | _content_words(body)
+    unknown = sorted(title_words - vocab)
+    if not (title_words & anchor):
+        return False, unknown
+    if len(unknown) >= 2 and len(unknown) / len(title_words) >= 0.5:
+        return False, unknown
+    return True, unknown
+
+
+def _meta_connected(meta: str, title: str, topic: str, body: str) -> bool:
+    return bool(
+        set(re.findall(r"[a-zA-Z]{3,}", meta or ""))
+        & set(re.findall(r"[a-zA-Z]{3,}", f"{title} {topic} {body or ''}"))
+    )
 
 
 def _strip_markdown(text: str) -> str:
@@ -181,7 +265,7 @@ def seo_checks(
     """Run the SEO check suite; returns list of check dicts."""
     checks: list[dict] = []
     body_text = _strip_markdown(body)
-    word_count = len(body_text.split())
+    word_count = count_words(body)
     keywords = _keyword_variants(topic)
     h1s = [h for level, h in _headings(body) if level == 1]
     subheadings = [h for level, h in _headings(body) if level > 1]
@@ -223,6 +307,16 @@ def seo_checks(
         if kw_in_seo
         else "No topic keyword appears in the SEO title.",
         {"keywords": keywords},
+    )
+    title_ok, unknown_words = _seo_title_coherent(seo_title or "", title, topic, body)
+    add(
+        "seo",
+        title_ok,
+        "error" if not title_ok else "info",
+        "SEO title words all appear in the article."
+        if title_ok
+        else f"SEO title contains words not in the article: {', '.join(unknown_words[:4])}.",
+        {"unknown_words": unknown_words[:8]},
     )
     kw_in_title = any(kw in title_lower for kw in keywords)
     add(

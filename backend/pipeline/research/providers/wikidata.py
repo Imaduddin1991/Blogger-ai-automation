@@ -6,7 +6,12 @@ Free, keyless. Adds structured/entity coverage alongside Wikipedia prose.
 
 from __future__ import annotations
 
-from pipeline.research.providers.base import ResearchProvider, Source, fetch_json
+from pipeline.research.providers.base import (
+    ResearchProvider,
+    Source,
+    compute_relevance,
+    fetch_json,
+)
 from pipeline.research.providers.registry import register
 
 _WIKIDATA_API = "https://www.wikidata.org/w/api.php"
@@ -35,13 +40,14 @@ class WikidataProvider(ResearchProvider):
             label = item.get("label") or ""
             if not qid or not label:
                 continue
+            snippet = (item.get("description") or "").strip()
             sources.append(
                 Source(
                     provider=self.name,
                     title=label,
                     url=f"https://www.wikidata.org/wiki/{qid}",
-                    snippet=(item.get("description") or "").strip(),
-                    relevance=1.0 if (item.get("description") or "").strip() else 0.6,
+                    snippet=snippet,
+                    relevance=compute_relevance(topic, label, snippet),
                 )
             )
         return sources

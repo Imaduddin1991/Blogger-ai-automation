@@ -57,6 +57,7 @@ export type Article = {
   word_count: number;
   status: string;
   generation_errors: Record<string, string> | null;
+  review_approved_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -168,6 +169,10 @@ export async function updateArticle(id: number, patch: ArticleUpdate): Promise<A
 
 export async function recheckArticle(id: number): Promise<ArticleDetail> {
   return request<ArticleDetail>(`/articles/${id}/recheck`, { method: "POST" });
+}
+
+export async function approveArticle(id: number): Promise<ArticleDetail> {
+  return request<ArticleDetail>(`/articles/${id}/approve`, { method: "POST" });
 }
 
 export async function retryArticle(id: number): Promise<ArticleStart> {

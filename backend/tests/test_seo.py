@@ -1,6 +1,8 @@
 """SEO stage: slug, fallback metadata, JSON parsing, rule checks."""
 
 from pipeline.seo import (
+    _seo_title_coherent,
+    _truncate_with_ellipsis,
     build_slug,
     fallback_metadata,
     parse_seo_json,
@@ -55,6 +57,51 @@ def test_parse_seo_json_garbage_falls_back():
     assert parsed.meta_description == fallback.meta_description
 
 
+def test_truncate_with_ellipsis_never_mid_word():
+    long_meta = "This is a sentence about solar panels. " * 10
+    truncated = _truncate_with_ellipsis(long_meta, 100)
+    assert len(truncated) <= 100
+    assert truncated.endswith("…")
+    assert truncated[:-1].endswith(".")  # cut on a sentence boundary, not mid-word
+
+
+def test_truncate_with_ellipsis_keeps_short_text():
+    assert _truncate_with_ellipsis("Short.", 160) == "Short."
+
+
+def test_seo_title_coherent_flags_hallucinated_tail():
+    ok, unknown = _seo_title_coherent(
+        "Why Do Cats Purr?",
+        "Why do cats purr?",
+        "Why do cats purr?",
+        GOOD_BODY,
+    )
+    assert ok is True
+    ok, unknown = _seo_title_coherent(
+        "Why Do Cats Purr? - Exploring the Mysteries of the Cat's Flu",
+        "Why do cats purr?",
+        "Why do cats purr?",
+        GOOD_BODY,
+    )
+    assert ok is False
+    assert "flu" in unknown
+
+
+def test_seo_checks_flag_hallucinated_seo_title():
+    checks = seo_checks(
+        "Why do cats purr?",
+        "Why Do Cats Purr? - Exploring the Mysteries of the Cat's Flu",
+        "A short description about cats.",
+        "why-do-cats-purr",
+        GOOD_BODY,
+        "Why do cats purr?",
+        target_word_count=1000,
+    )
+    coherence = [c for c in checks if "not in the article" in (c["message"] or "")]
+    assert len(coherence) == 1
+    assert coherence[0]["passed"] is False
+
+
 def test_seo_checks_pass_on_good_article():
     checks = seo_checks(
         "Solar panels for beginners",
@@ -67,7 +114,7 @@ def test_seo_checks_pass_on_good_article():
     )
     by_msg = {c["message"].split(" ")[0]: c for c in checks}
     assert all(c["passed"] for c in checks if c["severity"] != "info")
-    assert len(checks) == 10
+    assert len(checks) == 11
     assert any(c["check_type"] == "seo" for c in checks)
 
 

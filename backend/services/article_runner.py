@@ -83,5 +83,10 @@ def start_background_recheck(article_id: int) -> None:
     _runner_submit(_recheck_key(article_id), async_job(lambda: _run_recheck(article_id)))
 
 
+def ensure_running(article_id: int) -> None:
+    """Resume a stale in-flight run (e.g. after a restart)."""
+    start_background_article(article_id)
+
+
 def is_running(article_id: int) -> bool:
     return _runner_is_running(_key(article_id)) or _runner_is_running(_recheck_key(article_id))

@@ -9,7 +9,12 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
-from pipeline.research.providers.base import ResearchProvider, Source, fetch_json
+from pipeline.research.providers.base import (
+    ResearchProvider,
+    Source,
+    compute_relevance,
+    fetch_json,
+)
 from pipeline.research.providers.registry import register
 
 _WIKI_REST = "https://en.wikipedia.org/w/rest.php/v1/search/page"
@@ -29,13 +34,14 @@ class WikimediaProvider(ResearchProvider):
             if not title:
                 continue
             url = f"https://en.wikipedia.org/wiki/{quote(title.replace(' ', '_'))}"
+            snippet = (page.get("description") or "").strip()
             sources.append(
                 Source(
                     provider=self.name,
                     title=title,
                     url=url,
-                    snippet=(page.get("description") or "").strip(),
-                    relevance=1.0 if (page.get("description") or "").strip() else 0.6,
+                    snippet=snippet,
+                    relevance=compute_relevance(topic, title, snippet),
                 )
             )
         return sources

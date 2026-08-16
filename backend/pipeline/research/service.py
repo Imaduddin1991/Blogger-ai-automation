@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from db.models import Idea, Research, Source as SourceRow
 from pipeline.research import run_research
-from pipeline.research.providers.base import Source
+from pipeline.research.providers.base import MIN_RELEVANCE, Source, compute_relevance
 from pipeline.summarize import summarize_research
 from services.ollama_client import OllamaClient, OllamaUnavailableError
 
@@ -121,7 +121,18 @@ async def run_research_job(
     research.status = STATUS_RESEARCHING
     db.commit()
 
-    output = await run_research(topic or research.topic or "", limit=limit)
+    topic = topic or research.topic or ""
+    output = await run_research(topic, limit=limit)
+
+    # Normalize relevance to topic overlap and drop off-topic sources before
+    # they reach the summary or the article's cited sources. Irrelevant pages
+    # (e.g. a "Katy Perry" result for a cats query) never persist.
+    kept: list[Source] = []
+    for s in output.sources:
+        s.relevance = compute_relevance(topic, s.title, s.snippet)
+        if s.relevance >= MIN_RELEVANCE:
+            kept.append(s)
+    output.sources = kept
 
     research.sources = [
         SourceRow(

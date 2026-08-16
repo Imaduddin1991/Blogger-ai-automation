@@ -109,6 +109,7 @@ class ArticleRead(BaseModel):
     word_count: int
     status: str
     generation_errors: dict | None
+    review_approved_at: datetime | None
     created_at: datetime
     updated_at: datetime
 

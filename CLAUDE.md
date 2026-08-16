@@ -7,7 +7,7 @@ Project instruction file for working in this repo with OpenCode/gstack.
 - **Name:** blogger-ai-automation
 - **Purpose:** Free, self-hosted AI Blogger automation platform (idea -> research -> article -> SEO -> checks -> images -> review -> publish to Blogger).
 - **Constraints:** free-first, local AI via Ollama, Blogger-only for v1, lightweight (8 GB RAM, i5 6th gen), modular monolith.
-- **Status:** planning only. No application code yet. See `docs/`.
+- **Status:** Phase 1 + 2 + 3 implemented and tested (backend 93 tests, frontend 19 tests). Phase 3.1 quality fixes shipped: SEO metadata validation + deterministic fallback, sentence-aware truncation, source relevance filtering, human approve gate (`checked -> ready_for_review -> approved`), stale-check invalidation on SEO edits, canonical word-count, lazy-resume of stuck `drafting` rows, markdown preview in review UI. See `docs/`.
 
 ## Ground rules
 
@@ -15,13 +15,15 @@ Project instruction file for working in this repo with OpenCode/gstack.
 - Do not promise "guaranteed AdSense approval / ranking / indexing". The product provides checks and human review, not guarantees.
 - Prefer SQLite over PostgreSQL unless a concrete reason emerges.
 - No paid APIs, no microservices, no unnecessary dependencies.
+- Editing SEO fields (seo_title / meta_description / slug) invalidates checks just like content edits — run Recheck afterwards. Any publish job (Phase 5) must require `approved`.
+- Research sources are relevance-scored against the topic; off-topic results (e.g. a "Katy Perry" hit for a cats query) are filtered before persistence.
 
 ## Key decisions (product discovery, Step 1)
 
 - v1 is **self-hosted, single-user** (no account system; one Blogger connection, one Ollama).
 - Research uses a **strict ResearchProvider abstraction**. Initial free providers: Wikimedia/Wikipedia REST, Wikidata, DuckDuckGo Instant Answer. More providers can be added without touching the core pipeline.
 - Images via **free CC/stock sources first** (Wikimedia Commons, optional Pexels/Unsplash free tiers). Local generation is a later, optional module.
-- Default Ollama model class is **3-4B** (configurable per task).
+- Default Ollama model is **1.5B** (`qwen2.5:1.5b`) — a 4B model exhausts RAM on this hardware and never finishes a draft (configurable per task). Verified installed models: `qwen2.5:1.5b` (default), `qwen3:4b`.
 
 ## Commands
 

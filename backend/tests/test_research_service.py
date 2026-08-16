@@ -125,6 +125,80 @@ async def test_run_research_job_records_provider_errors_and_keeps_going(db, idea
     assert fresh.provider_errors == {"fake": "provider down"}
 
 
+async def test_run_research_job_drops_off_topic_sources(db, idea, monkeypatch):
+    """An irrelevant source (e.g. "Katy Perry" for a cats query) is filtered out."""
+
+    async def fake(topic, limit=5, providers=None):
+        from pipeline.research import ResearchOutput
+
+        return ResearchOutput(
+            topic=topic,
+            sources=[
+                Source(provider="fake", title=f"{topic} A", url="https://example.com/a", snippet="about cats purring"),
+                Source(provider="fake", title="Katy Perry - American singer (born 1984)", url="https://example.com/b", snippet="American singer-songwriter"),
+                Source(provider="fake", title="Another unrelated thing", url="https://example.com/c", snippet="totally different content"),
+            ],
+            providers_attempted=["fake"],
+        )
+
+    monkeypatch.setattr("pipeline.research.service.run_research", fake)
+    research = create_research(db, idea.id, idea.title)
+    await run_research_job(db, research, topic=idea.title, client=FakeClient())
+
+    sources = db.scalars(select(SourceRow).where(SourceRow.research_id == research.id)).all()
+    urls = {s.url for s in sources}
+    assert "https://example.com/a" in urls
+    assert "https://example.com/b" not in urls  # Katy Perry dropped
+    assert "https://example.com/c" not in urls  # unrelated dropped
+
+
+async def test_run_research_job_keeps_dissenting_source(db, monkeypatch):
+    """A relevant source that contradicts the article's claim is kept.
+
+    Regression guard for source-grounding: relevance filtering targets topic
+    overlap only, never agreement. A source that says big cats cannot purr
+    must survive to the human review gate so a contradictory claim is never
+    silently hidden from the reviewer (claim-level fact-checking is a known
+    limitation, not auto-detected).
+    """
+    cats_idea = Idea(title="Why do cats purr?", prompt="nope")
+    db.add(cats_idea)
+    db.commit()
+    db.refresh(cats_idea)
+
+    async def fake(topic, limit=5, providers=None):
+        from pipeline.research import ResearchOutput
+
+        return ResearchOutput(
+            topic=topic,
+            sources=[
+                Source(
+                    provider="fake",
+                    title="Why do cats purr?",
+                    url="https://example.com/a",
+                    snippet="Domestic cats purr when content.",
+                ),
+                Source(
+                    provider="fake",
+                    title="Lions and tigers cannot purr",
+                    url="https://example.com/b",
+                    snippet="Unlike domestic cats, big cats like lions and tigers do not purr.",
+                ),
+            ],
+            providers_attempted=["fake"],
+        )
+
+    monkeypatch.setattr("pipeline.research.service.run_research", fake)
+    research = create_research(db, cats_idea.id, cats_idea.title)
+    await run_research_job(db, research, topic=cats_idea.title, client=FakeClient())
+
+    sources = db.scalars(select(SourceRow).where(SourceRow.research_id == research.id)).all()
+    urls = {s.url for s in sources}
+    assert "https://example.com/a" in urls
+    assert "https://example.com/b" in urls  # dissenting-but-relevant source survives
+
+
+
 async def test_run_research_job_without_summary_still_completes(db, idea, monkeypatch):
     """Ollama unavailable must not lose sources: summary stays None, run completes."""
 

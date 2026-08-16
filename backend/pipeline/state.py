@@ -38,7 +38,7 @@ TRANSITIONS: dict[str, set[str]] = {
     DRAFTING: {DRAFTED, DRAFT},              # success, or fail -> retry
     DRAFTED: {SEO_DONE, DRAFTING},
     SEO_DONE: {CHECKED, DRAFTED},
-    CHECKED: {IMAGE_READY, DRAFTED},         # image step, or back to edit
+    CHECKED: {IMAGE_READY, READY_FOR_REVIEW, DRAFTED},  # image step, approve, or back to edit
     IMAGE_READY: {READY_FOR_REVIEW, DRAFTED},
     READY_FOR_REVIEW: {APPROVED, DRAFTED},   # approve, or edit more
     APPROVED: {SCHEDULED, READY_FOR_REVIEW, PUBLISHING},

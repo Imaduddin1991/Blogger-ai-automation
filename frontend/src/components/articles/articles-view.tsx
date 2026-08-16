@@ -9,6 +9,7 @@ import {
   Loader2,
   RotateCw,
   Save,
+  ShieldCheck,
   XCircle,
 } from "lucide-react";
 
@@ -17,6 +18,7 @@ import {
   listArticles,
   recheckArticle,
   retryArticle,
+  approveArticle,
   statusLabel,
   updateArticle,
   type Article,
@@ -38,6 +40,7 @@ import { Separator } from "@/components/ui/separator";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
+import { renderMarkdown } from "@/lib/markdown";
 
 const RETRYABLE = new Set(["draft", "drafting"]);
 
@@ -156,6 +159,7 @@ function ArticleDetailCard({
   const [form, setForm] = useState<ArticleForm>(() => formFrom(article));
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [bodyMode, setBodyMode] = useState<"edit" | "preview">("edit");
   const [prevId, setPrevId] = useState(article.id);
   const [prevStatus, setPrevStatus] = useState(article.status);
 
@@ -218,7 +222,25 @@ function ArticleDetailCard({
     }
   }, [article.id, onChange, onMessage]);
 
+  const handleApprove = useCallback(async () => {
+    setBusy(true);
+    try {
+      const updated = await approveArticle(article.id);
+      onChange(updated);
+      onMessage(
+        updated.status === "approved"
+          ? "Article approved — ready to schedule publishing in a later phase."
+          : "Marked ready for review. Click Approve again to finalize.",
+      );
+    } catch (e) {
+      onMessage(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [article.id, onChange, onMessage]);
+
   const errors = article.generation_errors ?? null;
+  const canApprove = (article.status === "checked" || article.status === "ready_for_review") && !article.running;
 
   return (
     <div className="space-y-6">
@@ -257,14 +279,47 @@ function ArticleDetailCard({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="article-body">Body (Markdown)</Label>
-            <textarea
-              id="article-body"
-              value={form.body}
-              onChange={(e) => setForm({ ...form, body: e.target.value })}
-              rows={14}
-              className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs leading-relaxed shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            />
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="article-body">Body (Markdown)</Label>
+              <div className="flex items-center gap-1 rounded-md border border-input p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setBodyMode("edit")}
+                  className={`rounded px-2 py-0.5 text-xs transition-colors ${
+                    bodyMode === "edit"
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBodyMode("preview")}
+                  className={`rounded px-2 py-0.5 text-xs transition-colors ${
+                    bodyMode === "preview"
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Preview
+                </button>
+              </div>
+            </div>
+            {bodyMode === "edit" ? (
+              <textarea
+                id="article-body"
+                value={form.body}
+                onChange={(e) => setForm({ ...form, body: e.target.value })}
+                rows={14}
+                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs leading-relaxed shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              />
+            ) : (
+              <div
+                className="markdown-preview max-w-none rounded-md border border-input px-4 py-3"
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(form.body || "") }}
+              />
+            )}
           </div>
 
           <div className="flex items-center justify-between gap-2">
@@ -335,6 +390,19 @@ function ArticleDetailCard({
               <RotateCw className="h-4 w-4" />
               Retry generation
             </Button>
+            <Button
+              variant="default"
+              onClick={() => void handleApprove()}
+              disabled={!canApprove || busy || saving}
+            >
+              <ShieldCheck className="h-4 w-4" />
+              {article.status === "ready_for_review" ? "Approve article" : "Mark ready for review"}
+            </Button>
+            {article.review_approved_at ? (
+              <span className="text-xs text-muted-foreground">
+                Approved {new Date(article.review_approved_at).toLocaleString()}
+              </span>
+            ) : null}
           </div>
         </CardContent>
       </Card>

@@ -9,12 +9,20 @@ from sqlalchemy.orm import sessionmaker
 from db.base import Base
 from db.models import Article, CheckResult, Idea, Research, Source as SourceRow
 from pipeline.article.service import (
+    approve_article,
     create_article_from_research,
     recheck_article,
     run_article_job,
 )
 from pipeline.research.providers.base import Source
-from pipeline.state import CHECKED, DRAFT, DRAFTED, SEO_DONE
+from pipeline.state import (
+    APPROVED,
+    CHECKED,
+    DRAFT,
+    DRAFTED,
+    READY_FOR_REVIEW,
+    SEO_DONE,
+)
 
 
 @pytest.fixture
@@ -156,3 +164,38 @@ async def test_recheck_article_from_drafted_runs_seo_and_checks(db):
     fresh2 = db.scalars(select(Article).where(Article.id == article.id)).one()
     assert fresh2.status == CHECKED
     assert fresh2.seo_title
+
+
+async def test_approve_article_gate(db):
+    """checked -> ready_for_review -> approved, with review_approved_at set."""
+    _, research = _seed_research(db)
+    article = create_article_from_research(db, research)
+    await run_article_job(db, article, client=FakeClient())
+    article = db.scalars(select(Article).where(Article.id == article.id)).one()
+    assert article.status == CHECKED
+
+    approve_article(db, article)
+    ready = db.scalars(select(Article).where(Article.id == article.id)).one()
+    assert ready.status == READY_FOR_REVIEW
+    assert ready.review_approved_at is None
+
+    approve_article(db, ready)
+    approved = db.scalars(select(Article).where(Article.id == article.id)).one()
+    assert approved.status == APPROVED
+    assert approved.review_approved_at is not None
+
+    # Approving again is a no-op past the gate.
+    approve_article(db, approved)
+    final = db.scalars(select(Article).where(Article.id == article.id)).one()
+    assert final.status == APPROVED
+    assert final.review_approved_at == approved.review_approved_at
+
+
+async def test_approve_article_rejects_non_reviewable_state(db):
+    _, research = _seed_research(db)
+    article = create_article_from_research(db, research)
+    article.status = DRAFT
+    db.commit()
+
+    with pytest.raises(ValueError):
+        approve_article(db, article)
