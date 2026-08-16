@@ -70,8 +70,61 @@ def _apply_sqlite_index_workarounds() -> None:
         )
 
 
+# Additive Image columns added to pre-existing databases. Mirrors the
+# Phase 4C SQLAlchemy model exactly; `Base.metadata.create_all()` only creates
+# missing tables, so existing `images` tables need these added via ALTER.
+_IMAGE_ADDED_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("status", "VARCHAR(20) DEFAULT 'candidate'"),
+    ("page_url", "VARCHAR(1000)"),
+    ("author", "TEXT"),
+    ("license_url", "VARCHAR(500)"),
+    ("attribution_required", "BOOLEAN DEFAULT 0"),
+    ("usage_notes", "TEXT"),
+    ("thumb_url", "VARCHAR(1000)"),
+    ("mime", "VARCHAR(50)"),
+    ("width", "INTEGER"),
+    ("height", "INTEGER"),
+    ("file_size", "INTEGER"),
+    ("relevance", "FLOAT DEFAULT 0.0"),
+    ("retrieved_at", "DATETIME"),
+    ("rejection_reason", "TEXT"),
+)
+
+
+def apply_image_column_migrations(engine) -> None:
+    """Add the Phase 4C image columns to an existing `images` table.
+
+    Idempotent: inspects `PRAGMA table_info(images)` and adds only missing
+    columns. Existing rows keep their data; legacy attached images become
+    `selected` (they were already attached) and get `retrieved_at` backfilled
+    from `created_at`. No destructive operations, no data rewrite.
+    """
+    if not str(engine.url).startswith("sqlite"):
+        return
+    with engine.begin() as conn:
+        try:
+            existing = {
+                row[1] for row in conn.exec_driver_sql("PRAGMA table_info(images)")
+            }
+        except Exception:
+            return  # no images table yet; create_all will build it with the columns
+        added_status = "status" not in existing
+        added_retrieved = "retrieved_at" not in existing
+        for name, ddl in _IMAGE_ADDED_COLUMNS:
+            if name in existing:
+                continue
+            conn.exec_driver_sql(f"ALTER TABLE images ADD COLUMN {name} {ddl}")
+        if added_status:
+            conn.exec_driver_sql("UPDATE images SET status='selected'")
+        if added_retrieved:
+            conn.exec_driver_sql(
+                "UPDATE images SET retrieved_at = created_at WHERE retrieved_at IS NULL"
+            )
+
+
 def init_db() -> None:
     from db import models  # noqa: F401  (register models on Base)
 
     Base.metadata.create_all(engine)
     _apply_sqlite_index_workarounds()
+    apply_image_column_migrations(engine)

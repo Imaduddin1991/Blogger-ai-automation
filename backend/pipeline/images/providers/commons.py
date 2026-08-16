@@ -24,7 +24,8 @@ from pipeline.images.providers.base import (
     verify_license,
 )
 from pipeline.images.providers.registry import register
-from pipeline.research.providers.base import USER_AGENT, compute_relevance
+from pipeline.images.relevance import compute_image_relevance
+from pipeline.research.providers.base import USER_AGENT
 
 _API = "https://commons.wikimedia.org/w/api.php"
 _MAX_LIMIT = 50  # Commons caps gsrlimit at 50 for non-bot accounts
@@ -174,7 +175,7 @@ class CommonsProvider(ImageProvider):
             width=_positive_int(info.get("width")),
             height=_positive_int(info.get("height")),
             file_size=_positive_int(info.get("size")),
-            relevance=compute_relevance(query_text, display_title, description),
+            relevance=compute_image_relevance(query_text, display_title, description),
         )
         if result.validate():
             return None

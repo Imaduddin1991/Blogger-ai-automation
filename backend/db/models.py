@@ -124,7 +124,14 @@ class Article(Base, TimestampMixin):
 
 
 class Image(Base, TimestampMixin):
-    """An image attached to an article (from a free source), with attribution."""
+    """An image attached to an article (from a free source), with attribution.
+
+    Phase 4C extends the Phase 1 model additively with the metadata the image
+    stage needs (status lifecycle, source page, license details, size guards,
+    relevance, retrieval time). Existing columns are reused: `url` is the
+    canonical image URL, `caption` holds the title, `alt` the description,
+    `attribution` the rendered credit line, `license` the raw license string.
+    """
 
     __tablename__ = "images"
 
@@ -137,6 +144,22 @@ class Image(Base, TimestampMixin):
     attribution: Mapped[str | None] = mapped_column(Text, nullable=True)
     license: Mapped[str | None] = mapped_column(String(100), nullable=True)
     position: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Phase 4C additions (additive; safe on existing rows).
+    status: Mapped[str] = mapped_column(String(20), default="candidate")
+    page_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    author: Mapped[str | None] = mapped_column(Text, nullable=True)
+    license_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    attribution_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    usage_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    thumb_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    mime: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    relevance: Mapped[float] = mapped_column(Float, default=0.0)
+    retrieved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     article: Mapped[Article | None] = relationship(back_populates="images")
 
