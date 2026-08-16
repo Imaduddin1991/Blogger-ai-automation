@@ -36,7 +36,6 @@ data/
 *.sqlite
 *.sqlite3
 uploads/
-images/
 static/generated/
 
 # --- OS / editor ---
