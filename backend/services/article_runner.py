@@ -104,6 +104,10 @@ def _images_key(article_id: int) -> str:
     return f"article-images:{article_id}"
 
 
+def _publish_key(article_id: int) -> str:
+    return f"article-publish:{article_id}"
+
+
 def start_background_article(article_id: int) -> None:
     """Queue an article generation run. No-op if already queued/running."""
     _runner_submit(_key(article_id), async_job(lambda: _run(article_id)))
@@ -129,4 +133,54 @@ def is_running(article_id: int) -> bool:
         _runner_is_running(_key(article_id))
         or _runner_is_running(_recheck_key(article_id))
         or _runner_is_running(_images_key(article_id))
+    )
+
+
+def is_publish_running(article_id: int) -> bool:
+    return _runner_is_running(_publish_key(article_id))
+
+
+async def _publish_job(article_id: int, as_draft: bool = False) -> None:
+    """Background publish job: loads article + connection, calls publish_to_blogger.
+
+    Opens its own DB session (same pattern as _run, _run_recheck, _run_images).
+    """
+    db = SessionLocal()
+    try:
+        from db.models import Article, BlogConnection
+
+        article = db.get(Article, article_id)
+        if article is None:
+            return
+        conn = db.get(BlogConnection, article.blog_id) if article.blog_id else None
+        if conn is None or conn.status != "connected" or not conn.token_encrypted:
+            _persist_failure(article_id, "publish", RuntimeError("No Blogger connection"))
+            return
+
+        from app.config import get_settings
+        from services.blogger_client import BloggerClient, TokenCryptor
+
+        settings = get_settings()
+        cryptor = TokenCryptor(settings.encryption_key)
+        token = cryptor.decrypt_token(conn.token_encrypted)
+        client = BloggerClient(token=token)
+
+        from pipeline.publish import publish_to_blogger
+
+        await publish_to_blogger(db, article, conn, client, as_draft=as_draft)
+    except Exception as exc:
+        logger.exception("Publish job %s failed", article_id)
+        _persist_failure(article_id, "publish", exc)
+    finally:
+        db.close()
+
+
+def start_background_publish(article_id: int, *, as_draft: bool = False) -> bool:
+    """Submit a publish job to the serial runner.
+
+    Returns False if a publish job is already queued/running for this article.
+    """
+    return _runner_submit(
+        _publish_key(article_id),
+        async_job(lambda: _publish_job(article_id, as_draft=as_draft)),
     )

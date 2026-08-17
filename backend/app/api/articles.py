@@ -1,7 +1,8 @@
-"""Article endpoints: create/generate, list, read detail, inline edit, recheck, retry.
+"""Article endpoints: create/generate, list, read detail, inline edit, recheck, retry, publish.
 
 Review UI backs onto these: editing persists immediately, `recheck` re-runs
-SEO + checks after edits, `retry` re-queues generation for a failed article.
+SEO + checks after edits, `retry` re-queues generation for a failed article,
+`publish` sends approved articles to Blogger.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,9 +17,11 @@ from app.schemas.common import (
     ArticleRead,
     ArticleStartRead,
     ArticleUpdate,
+    PublishRead,
+    PublishRequest,
 )
 from db.base import get_db
-from db.models import Article, CheckResult, Image, Research
+from db.models import Article, BlogConnection, CheckResult, Image, PublishJob, Research
 from pipeline.article.service import approve_article, create_article_from_research
 from pipeline.images.status import IMAGE_STATUS_REJECTED, IMAGE_STATUS_SELECTED
 from pipeline.research.service import STATUS_COMPLETE
@@ -30,14 +33,20 @@ from pipeline.state import (
     DRAFTING,
     IMAGES_SEARCHING,
     IMAGE_READY,
+    PUBLISH_FAILED,
+    PUBLISHED,
+    PUBLISHING,
     READY_FOR_REVIEW,
     SEO_DONE,
+    transition,
 )
 from services.article_runner import (
     ensure_running,
+    is_publish_running,
     is_running,
     start_background_article,
     start_background_images,
+    start_background_publish,
     start_background_recheck,
 )
 
@@ -305,3 +314,75 @@ def remove_image(article_id: int, image_id: int, db: Session = Depends(get_db)) 
     db.delete(image)
     db.commit()
     return _images_read(db, article)
+
+
+# --- Publishing (Phase 5E) ---------------------------------------------------
+
+
+def _get_publish_connection(db: Session, article: Article) -> BlogConnection:
+    """Fetch the blog connection or raise 400 if missing/disconnected."""
+    if article.blog_id is None:
+        raise HTTPException(status_code=400, detail="Article has no blog connection. Set a blog connection first.")
+    conn = db.get(BlogConnection, article.blog_id)
+    if conn is None or conn.status != "connected" or not conn.token_encrypted:
+        raise HTTPException(status_code=400, detail="Blogger is not connected. Please connect your Blogger account.")
+    return conn
+
+
+def _assert_publishable(db: Session, article: Article) -> None:
+    """Block concurrent publish jobs. Must be called before start_background_publish."""
+    if article.status == PUBLISHING or is_publish_running(article.id):
+        job = db.scalars(
+            select(PublishJob).where(PublishJob.article_id == article.id).order_by(PublishJob.id.desc()).limit(1)
+        ).first()
+        job_id = job.id if job else None
+        raise HTTPException(status_code=409, detail=f"A publish job is already running (job {job_id}).")
+
+
+@router.post("/{article_id}/publish", response_model=PublishRead, status_code=202)
+def publish_article(
+    article_id: int, payload: PublishRequest = PublishRequest(), db: Session = Depends(get_db)
+) -> PublishRead:
+    """Publish an approved article to Blogger.
+
+    Validates the approval gate, checks the Blogger connection, and submits
+    a background publish job. Returns 202 with the article's publishing status.
+    """
+    article = _get(db, article_id)
+    if article.status != APPROVED:
+        raise HTTPException(status_code=409, detail=f"Article must be '{APPROVED}' to publish, current status is '{article.status}'.")
+    _assert_publishable(db, article)
+    _get_publish_connection(db, article)
+    start_background_publish(article.id, as_draft=payload.as_draft)
+    return PublishRead.model_validate(article)
+
+
+@router.post("/{article_id}/publish/draft", response_model=PublishRead, status_code=202)
+def save_as_draft(article_id: int, db: Session = Depends(get_db)) -> PublishRead:
+    """Save an approved article as a Blogger draft (not publicly visible)."""
+    article = _get(db, article_id)
+    if article.status != APPROVED:
+        raise HTTPException(status_code=409, detail=f"Article must be '{APPROVED}' to save as draft, current status is '{article.status}'.")
+    _assert_publishable(db, article)
+    _get_publish_connection(db, article)
+    start_background_publish(article.id, as_draft=True)
+    return PublishRead.model_validate(article)
+
+
+@router.post("/{article_id}/publish/retry", response_model=PublishRead, status_code=202)
+def retry_publish(article_id: int, db: Session = Depends(get_db)) -> PublishRead:
+    """Retry publishing a failed article or re-publish/update an approved one.
+
+    For PUBLISH_FAILED articles: re-approves before submitting.
+    For APPROVED articles: submits directly (idempotent update if previously published).
+    """
+    article = _get(db, article_id)
+    if article.status not in (APPROVED, PUBLISH_FAILED):
+        raise HTTPException(status_code=409, detail=f"Article must be '{APPROVED}' or '{PUBLISH_FAILED}' to retry, current status is '{article.status}'.")
+    if article.status == PUBLISH_FAILED:
+        article.status = transition(PUBLISH_FAILED, APPROVED)
+        db.commit()
+    _assert_publishable(db, article)
+    _get_publish_connection(db, article)
+    start_background_publish(article.id, as_draft=False)
+    return PublishRead.model_validate(article)

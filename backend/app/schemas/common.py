@@ -195,3 +195,19 @@ class BloggerBlogRead(BaseModel):
     name: str
     url: str
     description: str = ""
+
+
+# --- Publish schemas (Phase 5E) --------------------------------------------
+
+
+class PublishRequest(BaseModel):
+    as_draft: bool = False
+
+
+class PublishRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    status: str
+    blogger_post_url: str | None = None
+    blogger_published_at: datetime | None = None
