@@ -118,6 +118,12 @@ class Article(Base, TimestampMixin):
     generation_errors: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     review_approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # Phase 5D: Blogger publishing metadata
+    blogger_post_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    blogger_post_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    blogger_published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    blogger_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+
     idea: Mapped[Idea | None] = relationship(back_populates="articles")
     images: Mapped[list["Image"]] = relationship(back_populates="article", cascade="all, delete-orphan")
     check_results: Mapped[list["CheckResult"]] = relationship(back_populates="article", cascade="all, delete-orphan")
@@ -192,6 +198,9 @@ class PublishJob(Base, TimestampMixin):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Phase 5D: Blogger post ID for idempotent updates
+    blogger_post_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
 class PublishLog(Base):

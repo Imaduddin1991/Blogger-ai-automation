@@ -122,9 +122,46 @@ def apply_image_column_migrations(engine) -> None:
             )
 
 
+# Phase 5D columns for Blogger publishing — added to existing articles
+# and publish_jobs tables via idempotent ALTER TABLE ADD COLUMN.
+_ARTICLE_PUBLISH_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("blogger_post_id", "VARCHAR(100)"),
+    ("blogger_post_url", "VARCHAR(500)"),
+    ("blogger_published_at", "DATETIME"),
+    ("blogger_status", "VARCHAR(30)"),
+)
+
+_PUBLISHJOB_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("blogger_post_id", "VARCHAR(100)"),
+)
+
+
+def apply_publish_column_migrations(engine) -> None:
+    """Add the Phase 5D Blogger-publishing columns to existing tables.
+
+    Idempotent: inspects PRAGMA table_info and adds only missing columns.
+    """
+    if not str(engine.url).startswith("sqlite"):
+        return
+    with engine.begin() as conn:
+        for table, columns in [("articles", _ARTICLE_PUBLISH_COLUMNS),
+                               ("publish_jobs", _PUBLISHJOB_COLUMNS)]:
+            try:
+                existing = {
+                    row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")
+                }
+            except Exception:
+                continue
+            for name, ddl in columns:
+                if name in existing:
+                    continue
+                conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+
+
 def init_db() -> None:
     from db import models  # noqa: F401  (register models on Base)
 
     Base.metadata.create_all(engine)
     _apply_sqlite_index_workarounds()
     apply_image_column_migrations(engine)
+    apply_publish_column_migrations(engine)
