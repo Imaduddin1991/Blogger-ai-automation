@@ -17,6 +17,9 @@ const api = vi.hoisted(() => ({
   retryArticleImages: vi.fn(),
   selectArticleImage: vi.fn(),
   removeArticleImage: vi.fn(),
+  getBloggerStatus: vi.fn(),
+  publishArticle: vi.fn(),
+  retryPublish: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -37,6 +40,9 @@ vi.mock("@/lib/api", () => ({
   retryArticleImages: api.retryArticleImages,
   selectArticleImage: api.selectArticleImage,
   removeArticleImage: api.removeArticleImage,
+  getBloggerStatus: api.getBloggerStatus,
+  publishArticle: api.publishArticle,
+  retryPublish: api.retryPublish,
   statusLabel: (s: string) =>
     s === "selected"
       ? "Selected"
@@ -96,6 +102,7 @@ function withImage(overrides: Partial<ImageRecord> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  api.getBloggerStatus.mockResolvedValue({ connected: true, blog_id: "1", blog_url: "https://blog.example.com", blog_name: "Blog", status: "connected" });
 });
 
 afterEach(() => {
@@ -373,6 +380,10 @@ describe("approval gate integration", () => {
       running: false,
       sources: [],
       check_results: [],
+      blogger_post_id: null,
+      blogger_post_url: null,
+      blogger_published_at: null,
+      blogger_status: null,
       ...overrides,
     };
   }

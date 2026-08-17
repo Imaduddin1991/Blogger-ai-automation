@@ -69,6 +69,10 @@ export type ArticleDetail = Article & {
   running: boolean;
   sources: ResearchSource[];
   check_results: CheckResult[];
+  blogger_post_id: string | null;
+  blogger_post_url: string | null;
+  blogger_published_at: string | null;
+  blogger_status: string | null;
 };
 
 export type ArticleStart = {
@@ -126,6 +130,25 @@ export type ArticleImages = {
   status: string;
   running: boolean;
   images: ImageRecord[];
+};
+
+export type PublishRead = {
+  id: number;
+  status: string;
+  blogger_post_url: string | null;
+  blogger_published_at: string | null;
+};
+
+export type BloggerStatus = {
+  connected: boolean;
+  blog_id: string | null;
+  blog_url: string | null;
+  blog_name: string | null;
+  status: string;
+};
+
+export type BloggerConnect = {
+  auth_url: string;
 };
 
 export class ApiError extends Error {
@@ -240,6 +263,34 @@ export async function removeArticleImage(
   imageId: number,
 ): Promise<ArticleImages> {
   return request<ArticleImages>(`/articles/${articleId}/images/${imageId}`, { method: "DELETE" });
+}
+
+export async function publishArticle(
+  articleId: number,
+  asDraft: boolean = false,
+): Promise<PublishRead> {
+  return request<PublishRead>(`/articles/${articleId}/publish`, {
+    method: "POST",
+    body: JSON.stringify({ as_draft: asDraft }),
+  });
+}
+
+export async function retryPublish(articleId: number): Promise<PublishRead> {
+  return request<PublishRead>(`/articles/${articleId}/publish/retry`, {
+    method: "POST",
+  });
+}
+
+export async function getBloggerStatus(): Promise<BloggerStatus> {
+  return request<BloggerStatus>("/blogger/status");
+}
+
+export async function connectBlogger(): Promise<BloggerConnect> {
+  return request<BloggerConnect>("/blogger/connect", { method: "POST" });
+}
+
+export async function disconnectBlogger(): Promise<BloggerStatus> {
+  return request<BloggerStatus>("/blogger/disconnect", { method: "POST" });
 }
 
 export function formatDate(value: string): string {

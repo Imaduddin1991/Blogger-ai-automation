@@ -42,6 +42,7 @@ import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { renderMarkdown } from "@/lib/markdown";
 import { ArticleImagesPanel } from "@/components/articles/article-images-panel";
+import { ArticlePublishPanel } from "@/components/articles/article-publish-panel";
 
 const RETRYABLE = new Set(["draft", "drafting"]);
 
@@ -433,6 +434,8 @@ function ArticleDetailCard({
         articleStatus={article.status}
         onRunningChange={setImagesBusy}
       />
+
+      <ArticlePublishPanel article={article} onChange={onChange} />
     </div>
   );
 }
