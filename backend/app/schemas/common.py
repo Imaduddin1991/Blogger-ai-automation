@@ -173,3 +173,25 @@ class ArticleImagesRead(BaseModel):
     status: str
     running: bool
     images: list[ImageRead] = []
+
+
+# --- Blogger connection schemas (Phase 5B) ----------------------------------
+
+
+class BloggerStatusRead(BaseModel):
+    connected: bool
+    blog_id: str | None = None
+    blog_url: str | None = None
+    blog_name: str | None = None
+    status: str = "disconnected"
+
+
+class BloggerConnectRead(BaseModel):
+    auth_url: str
+
+
+class BloggerBlogRead(BaseModel):
+    id: str
+    name: str
+    url: str
+    description: str = ""
