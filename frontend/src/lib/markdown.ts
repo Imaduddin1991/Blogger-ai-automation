@@ -6,6 +6,17 @@ export function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// Only http(s) URLs (and scheme-less relative/anchors) are ever allowed into
+// href/src attributes. Anything else (javascript:, data:, vbscript:, file:)
+// returns null so callers render plain text instead of an executable URL.
+export function safeUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (/^(https?:\/\/)/i.test(trimmed)) return trimmed;
+  if (!trimmed.includes(":")) return trimmed;
+  return null;
+}
+
 function inlineMarkdown(value: string): string {
   return value
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")

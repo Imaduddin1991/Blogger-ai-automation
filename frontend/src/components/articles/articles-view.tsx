@@ -41,11 +41,15 @@ import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { renderMarkdown } from "@/lib/markdown";
+import { ArticleImagesPanel } from "@/components/articles/article-images-panel";
 
 const RETRYABLE = new Set(["draft", "drafting"]);
 
 function StatusBadge({ article }: { article: Article }) {
-  const running = article.status === "drafting" || article.status === "researching";
+  const running =
+    article.status === "drafting" ||
+    article.status === "researching" ||
+    article.status === "images_searching";
   const variant =
     article.status === "checked"
       ? "default"
@@ -159,6 +163,7 @@ function ArticleDetailCard({
   const [form, setForm] = useState<ArticleForm>(() => formFrom(article));
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [imagesBusy, setImagesBusy] = useState(false);
   const [bodyMode, setBodyMode] = useState<"edit" | "preview">("edit");
   const [prevId, setPrevId] = useState(article.id);
   const [prevStatus, setPrevStatus] = useState(article.status);
@@ -240,7 +245,10 @@ function ArticleDetailCard({
   }, [article.id, onChange, onMessage]);
 
   const errors = article.generation_errors ?? null;
-  const canApprove = (article.status === "checked" || article.status === "ready_for_review") && !article.running;
+  const canApprove =
+    (article.status === "checked" || article.status === "ready_for_review") &&
+    !article.running &&
+    !imagesBusy;
 
   return (
     <div className="space-y-6">
@@ -419,6 +427,12 @@ function ArticleDetailCard({
           <CheckPanel checks={article.check_results} />
         </CardContent>
       </Card>
+
+      <ArticleImagesPanel
+        articleId={article.id}
+        articleStatus={article.status}
+        onRunningChange={setImagesBusy}
+      />
     </div>
   );
 }

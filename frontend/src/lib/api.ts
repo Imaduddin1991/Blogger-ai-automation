@@ -93,7 +93,42 @@ export type Dashboard = {
   publish_job_count: number;
 };
 
-class ApiError extends Error {
+export type ImageRecord = {
+  id: number;
+  article_id: number | null;
+  provider: string;
+  url: string;
+  alt: string | null;
+  caption: string | null;
+  attribution: string | null;
+  license: string | null;
+  position: number;
+  status: string;
+  page_url: string | null;
+  author: string | null;
+  license_url: string | null;
+  attribution_required: boolean;
+  usage_notes: string | null;
+  thumb_url: string | null;
+  mime: string | null;
+  width: number | null;
+  height: number | null;
+  file_size: number | null;
+  relevance: number;
+  retrieved_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ArticleImages = {
+  article_id: number;
+  status: string;
+  running: boolean;
+  images: ImageRecord[];
+};
+
+export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
@@ -179,6 +214,34 @@ export async function retryArticle(id: number): Promise<ArticleStart> {
   return request<ArticleStart>(`/articles/${id}/retry`, { method: "POST" });
 }
 
+export async function getArticleImages(articleId: number): Promise<ArticleImages> {
+  return request<ArticleImages>(`/articles/${articleId}/images`);
+}
+
+export async function searchArticleImages(articleId: number): Promise<ArticleImages> {
+  return request<ArticleImages>(`/articles/${articleId}/images/search`, { method: "POST" });
+}
+
+export async function retryArticleImages(articleId: number): Promise<ArticleImages> {
+  return request<ArticleImages>(`/articles/${articleId}/images/retry`, { method: "POST" });
+}
+
+export async function selectArticleImage(
+  articleId: number,
+  imageId: number,
+): Promise<ArticleImages> {
+  return request<ArticleImages>(`/articles/${articleId}/images/${imageId}/select`, {
+    method: "POST",
+  });
+}
+
+export async function removeArticleImage(
+  articleId: number,
+  imageId: number,
+): Promise<ArticleImages> {
+  return request<ArticleImages>(`/articles/${articleId}/images/${imageId}`, { method: "DELETE" });
+}
+
 export function formatDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -212,6 +275,8 @@ export function statusLabel(status: string): string {
       return "SEO done";
     case "checked":
       return "Checked";
+    case "images_searching":
+      return "Searching for images…";
     case "image_ready":
       return "Image ready";
     case "ready_for_review":
@@ -226,6 +291,14 @@ export function statusLabel(status: string): string {
       return "Published";
     case "publish_failed":
       return "Publish failed";
+    case "candidate":
+      return "Candidate";
+    case "suggested":
+      return "Suggested";
+    case "selected":
+      return "Selected";
+    case "rejected":
+      return "Rejected";
     default:
       return status;
   }
