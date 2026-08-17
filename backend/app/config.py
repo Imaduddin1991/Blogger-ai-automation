@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     local_auth_token: str = ""
     encryption_key: str = ""
 
+    # Blogger OAuth 2.0 (Phase 5)
+    blogger_client_id: str = ""
+    blogger_client_secret: str = ""
+    blogger_redirect_uri: str = "http://127.0.0.1:8000/api/blogger/callback"
+
 
 @lru_cache
 def get_settings() -> Settings:

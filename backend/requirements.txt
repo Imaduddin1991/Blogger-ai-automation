@@ -5,6 +5,7 @@ pydantic>=2.9
 pydantic-settings>=2.6
 sqlalchemy>=2.0.36
 httpx>=0.28
+cryptography>=42.0
 
 # Dev / test
 pytest>=8
