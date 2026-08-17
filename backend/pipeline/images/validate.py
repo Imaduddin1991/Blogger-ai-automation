@@ -31,6 +31,15 @@ MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 MAX_IMAGE_DIMENSION = 10000  # px
 
 _SVG_EXTENSIONS = (".svg", ".svgz")
+# Dangerous non-image extensions that a spoofed MIME or metadata could carry.
+_DANGEROUS_EXTENSIONS = (
+    ".exe", ".bat", ".cmd", ".sh", ".ps1", ".msi", ".com", ".scr",
+    ".php", ".php3", ".php4", ".php5", ".phtml",
+    ".js", ".vbs", ".vbe", ".wsf", ".wsh",
+    ".jar", ".cgi", ".pl", ".py", ".rb",
+    ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+    ".zip", ".rar", ".7z", ".tar", ".gz",
+)
 _FORBIDDEN_SCHEMES = ("javascript", "data", "file")
 
 
@@ -83,6 +92,11 @@ def validate_image_metadata(result: ImageResult) -> list[str]:
         problem = _scheme_problem(thumb_url)
         if problem:
             problems.append(f"thumb_url {problem}")
+        thumb_lower = thumb_url.lower()
+        for ext in _DANGEROUS_EXTENSIONS:
+            if thumb_lower.endswith(ext):
+                problems.append(f"thumb_url has dangerous extension: {ext}")
+                break
 
     license_url = (result.license_url or "").strip()
     if license_url:
@@ -95,6 +109,12 @@ def validate_image_metadata(result: ImageResult) -> list[str]:
         problems.append(f"mime {mime or 'missing'} is not an allowed raster type")
     if mime == "image/svg+xml" or (result.image_url or "").lower().endswith(_SVG_EXTENSIONS):
         problems.append("svg images are not supported")
+
+    url_lower = (result.image_url or "").lower()
+    for ext in _DANGEROUS_EXTENSIONS:
+        if url_lower.endswith(ext):
+            problems.append(f"image_url has dangerous extension: {ext}")
+            break
 
     if result.file_size is not None and result.file_size > MAX_IMAGE_FILE_SIZE:
         problems.append(f"file size {result.file_size} exceeds {MAX_IMAGE_FILE_SIZE} bytes")

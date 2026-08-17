@@ -7,7 +7,7 @@ Project instruction file for working in this repo with OpenCode/gstack.
 - **Name:** blogger-ai-automation
 - **Purpose:** Free, self-hosted AI Blogger automation platform (idea -> research -> article -> SEO -> checks -> images -> review -> publish to Blogger).
 - **Constraints:** free-first, local AI via Ollama, Blogger-only for v1, lightweight (8 GB RAM, i5 6th gen), modular monolith.
-- **Status:** Phase 1 + 2 + 3 implemented and tested (backend 93 tests, frontend 19 tests). Phase 3.1 quality fixes shipped: SEO metadata validation + deterministic fallback, sentence-aware truncation, source relevance filtering, human approve gate (`checked -> ready_for_review -> approved`), stale-check invalidation on SEO edits, canonical word-count, lazy-resume of stuck `drafting` rows, markdown preview in review UI. See `docs/`.
+- **Status:** Phase 1 + 2 + 3 + 4 implemented and tested (backend 341 tests, frontend 53 tests). Phase 4 (images) complete: 4A provider abstraction, 4B Wikimedia Commons, 4C validation/dedup, 4D pipeline integration, 4E frontend review UI, 4F hardening. Phase 3.1 quality fixes shipped. See `docs/`.
 
 ## Ground rules
 

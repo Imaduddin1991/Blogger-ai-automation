@@ -211,3 +211,44 @@ def test_multiple_problems_are_all_reported():
     assert any("mime" in p for p in problems)
     assert any("file size" in p for p in problems)
     assert any("width" in p for p in problems)
+
+
+# --- Dangerous extensions (Phase 4F hardening) ---------------------------------
+
+
+@pytest.mark.parametrize(
+    "ext",
+    [
+        ".exe", ".bat", ".cmd", ".sh", ".ps1", ".msi", ".com", ".scr",
+        ".php", ".php3", ".js", ".vbs", ".jar", ".cgi", ".pl", ".py",
+        ".doc", ".docx", ".zip", ".rar",
+    ],
+)
+def test_dangerous_extension_on_image_url_rejected(ext):
+    problems = _problems(
+        _result(image_url=f"https://upload.wikimedia.org/wikipedia/commons/a{ext}")
+    )
+    assert any("dangerous extension" in p for p in problems)
+
+
+@pytest.mark.parametrize("ext", [".exe", ".php", ".js", ".sh", ".zip"])
+def test_dangerous_extension_on_thumb_url_rejected(ext):
+    problems = _problems(
+        _result(thumb_url=f"https://upload.wikimedia.org/wikipedia/commons/thumb/a{ext}")
+    )
+    assert any("thumb_url has dangerous extension" in p for p in problems)
+
+
+def test_normal_image_url_extension_accepted():
+    assert _problems(_result(image_url="https://upload.wikimedia.org/wikipedia/commons/photo.jpg")) == []
+
+
+def test_dangerous_extension_with_valid_raster_mime_rejected():
+    """A spoofed MIME type should not bypass the extension check."""
+    problems = _problems(
+        _result(
+            image_url="https://upload.wikimedia.org/wikipedia/commons/a.exe",
+            mime="image/jpeg",
+        )
+    )
+    assert any("dangerous extension" in p for p in problems)
