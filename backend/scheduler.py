@@ -87,7 +87,7 @@ def _fire_job(db: Session, job: PublishJob) -> None:
     ok = start_background_publish(article.id)
     if not ok:
         logger.info("Scheduled job %s: publish already queued for article %s", job.id, article.id)
-        job.status = "completed"
+        job.status = "skipped"
         db.commit()
 
 

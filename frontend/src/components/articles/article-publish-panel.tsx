@@ -178,7 +178,11 @@ export function ArticlePublishPanel({
     setBusy(true);
     setError(null);
     try {
-      const runAt = new Date(scheduleDate).toISOString();
+      const tzOffset = -new Date().getTimezoneOffset();
+      const sign = tzOffset >= 0 ? "+" : "-";
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const offset = `${sign}${pad(Math.floor(Math.abs(tzOffset) / 60))}:${pad(Math.abs(tzOffset) % 60)}`;
+      const runAt = new Date(scheduleDate + offset).toISOString();
       await scheduleArticle(article.id, runAt);
       const fresh = await getArticle(article.id);
       onChange(fresh);
@@ -210,6 +214,7 @@ export function ArticlePublishPanel({
       await deletePublishedPost(article.id);
       const fresh = await getArticle(article.id);
       onChange(fresh);
+      setBusy(false);
     } catch (e) {
       setBusy(false);
       setError(e instanceof Error ? e.message : String(e));

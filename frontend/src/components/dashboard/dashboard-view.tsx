@@ -97,7 +97,7 @@ export function DashboardView() {
         <StatCard label="Articles" value={data?.article_count ?? 0} href="/articles" icon={FileText} />
         <StatCard label="Published" value={data?.publish_success_count ?? 0} href="/publishing" icon={CheckCircle2} />
         <StatCard label="Publish failed" value={data?.publish_fail_count ?? 0} href="/publishing" icon={XCircle} />
-        <StatCard label="Scheduled" value={data?.scheduled_count ?? 0} href="/publishing" icon={CalendarClock} />
+        <StatCard label="Scheduled" value={data?.scheduled_count ?? 0} href="/scheduler" icon={CalendarClock} />
       </div>
 
       {empty ? (

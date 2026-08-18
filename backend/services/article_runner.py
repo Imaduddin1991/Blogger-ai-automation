@@ -175,8 +175,9 @@ async def _publish_job(article_id: int, as_draft: bool = False) -> None:
             _persist_failure(article_id, "publish", RuntimeError(f"Token expired: {exc}"))
             return
 
-        # Persist refreshed token if it changed
-        if token is not cryptor.decrypt_token(conn.token_encrypted):
+        # Persist refreshed token if the access token value changed
+        old_access = cryptor.decrypt_token(conn.token_encrypted).access_token
+        if token.access_token != old_access:
             conn.token_encrypted = cryptor.encrypt_token(token)
             conn.token_expires_at = token.expiry
             db.commit()

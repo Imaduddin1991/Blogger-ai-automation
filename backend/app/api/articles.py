@@ -416,7 +416,12 @@ async def delete_published_post(article_id: int, db: Session = Depends(get_db)) 
     token = cryptor.decrypt_token(conn.token_encrypted)
 
     try:
-        token = await refresh_if_needed(token)
+        new_token = await refresh_if_needed(token)
+        if new_token.access_token != token.access_token:
+            conn.token_encrypted = cryptor.encrypt_token(new_token)
+            conn.token_expires_at = new_token.expiry
+            db.commit()
+            token = new_token
     except Exception:
         pass  # Best-effort refresh; delete may still work with stale token
 
@@ -424,9 +429,10 @@ async def delete_published_post(article_id: int, db: Session = Depends(get_db)) 
     try:
         await client.delete_post(conn.blog_id, article.blogger_post_id)
     except Exception as exc:
+        from pipeline.publish import _sanitize_error
         raise HTTPException(
             status_code=502,
-            detail=f"Failed to delete Blogger post: {exc}",
+            detail=f"Failed to delete Blogger post: {_sanitize_error(str(exc))}",
         )
 
     # Clear Blogger metadata and transition to DRAFT
