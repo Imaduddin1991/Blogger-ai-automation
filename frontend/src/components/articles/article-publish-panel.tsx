@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ExternalLink, Globe, Loader2, RotateCw, Save } from "lucide-react";
+import { CalendarClock, ExternalLink, Globe, Loader2, RotateCw, Save, X } from "lucide-react";
 
 import {
   getArticle,
   publishArticle,
   retryPublish,
   getBloggerStatus,
+  scheduleArticle,
+  cancelSchedule,
   formatDate,
   type ArticleDetail,
   type BloggerStatus,
@@ -21,6 +23,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_MAX_MS = 120_000;
@@ -30,6 +33,7 @@ const PUBLISH_VISIBLE = new Set([
   "publishing",
   "published",
   "publish_failed",
+  "scheduled",
 ]);
 
 function hasPublishError(article: ArticleDetail): boolean {
@@ -166,6 +170,37 @@ export function ArticlePublishPanel({
     }
   }, [article.id, onChange, pollForPublish]);
 
+  const [scheduleDate, setScheduleDate] = useState("");
+
+  const handleSchedule = useCallback(async () => {
+    if (!scheduleDate) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const runAt = new Date(scheduleDate).toISOString();
+      await scheduleArticle(article.id, runAt);
+      const fresh = await getArticle(article.id);
+      onChange(fresh);
+      setScheduleDate("");
+    } catch (e) {
+      setBusy(false);
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [article.id, onChange, scheduleDate]);
+
+  const handleCancelSchedule = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await cancelSchedule(article.id);
+      const fresh = await getArticle(article.id);
+      onChange(fresh);
+    } catch (e) {
+      setBusy(false);
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [article.id, onChange]);
+
   if (!PUBLISH_VISIBLE.has(article.status)) return null;
 
   const isPublishing = article.status === "publishing" || busy;
@@ -223,31 +258,68 @@ export function ArticlePublishPanel({
           </div>
         ) : null}
 
+        {article.status === "scheduled" ? (
+          <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm dark:border-blue-800 dark:bg-blue-950">
+            <div className="flex items-center gap-2">
+              <CalendarClock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <span>Scheduled for publishing</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2 gap-1"
+              onClick={() => void handleCancelSchedule()}
+              disabled={busy}
+            >
+              <X className="h-3.5 w-3.5" />
+              Cancel schedule
+            </Button>
+          </div>
+        ) : null}
+
         {article.status === "approved" ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              onClick={() => {
-                if (!window.confirm("Publish this article live to Blogger?")) return;
-                void handlePublish(false);
-              }}
-              disabled={isPublishing || !blogStatus?.connected}
-            >
-              <Globe className="h-4 w-4" aria-hidden="true" />
-              Publish now
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => void handlePublish(true)}
-              disabled={isPublishing || !blogStatus?.connected}
-            >
-              <Save className="h-4 w-4" aria-hidden="true" />
-              Save as draft
-            </Button>
-            {blogStatus && !blogStatus.connected ? (
-              <p className="text-xs text-muted-foreground">
-                Connect your Blogger account in Settings to publish.
-              </p>
-            ) : null}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={() => {
+                  if (!window.confirm("Publish this article live to Blogger?")) return;
+                  void handlePublish(false);
+                }}
+                disabled={isPublishing || !blogStatus?.connected}
+              >
+                <Globe className="h-4 w-4" aria-hidden="true" />
+                Publish now
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void handlePublish(true)}
+                disabled={isPublishing || !blogStatus?.connected}
+              >
+                <Save className="h-4 w-4" aria-hidden="true" />
+                Save as draft
+              </Button>
+              {blogStatus && !blogStatus.connected ? (
+                <p className="text-xs text-muted-foreground">
+                  Connect your Blogger account in Settings to publish.
+                </p>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2 border-t pt-3">
+              <Input
+                type="datetime-local"
+                value={scheduleDate}
+                onChange={(e) => setScheduleDate(e.target.value)}
+                className="max-w-xs"
+              />
+              <Button
+                variant="outline"
+                onClick={() => void handleSchedule()}
+                disabled={!scheduleDate || busy || !blogStatus?.connected}
+              >
+                <CalendarClock className="h-4 w-4" aria-hidden="true" />
+                Schedule
+              </Button>
+            </div>
           </div>
         ) : article.status === "publish_failed" ? (
           <Button

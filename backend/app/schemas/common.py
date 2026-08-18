@@ -82,6 +82,9 @@ class DashboardRead(BaseModel):
     research_count: int
     article_count: int
     publish_job_count: int
+    publish_success_count: int = 0
+    publish_fail_count: int = 0
+    scheduled_count: int = 0
 
 
 class CheckResultRead(BaseModel):
@@ -211,3 +214,27 @@ class PublishRead(BaseModel):
     status: str
     blogger_post_url: str | None = None
     blogger_published_at: datetime | None = None
+
+
+# --- Publish log schemas (Phase 6A) ----------------------------------------
+
+
+class PublishLogEntry(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    article_id: int | None = None
+    article_title: str | None = None
+    action: str
+    result: str
+    details: dict | None = None
+    blogger_post_url: str | None = None
+    created_at: datetime
+
+
+class ScheduledArticleRead(BaseModel):
+    article_id: int
+    article_title: str | None = None
+    run_at: datetime
+    status: str
+    job_id: int

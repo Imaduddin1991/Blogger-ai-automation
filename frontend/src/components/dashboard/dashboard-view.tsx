@@ -4,10 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ArrowRight,
   CalendarClock,
+  CheckCircle2,
   FileText,
   LayoutDashboard,
   Lightbulb,
   Search,
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -89,11 +91,13 @@ export function DashboardView() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard label="Ideas" value={data?.idea_count ?? 0} href="/ideas" icon={Lightbulb} />
         <StatCard label="Research runs" value={data?.research_count ?? 0} href="/research" icon={Search} />
         <StatCard label="Articles" value={data?.article_count ?? 0} href="/articles" icon={FileText} />
-        <StatCard label="Publish jobs" value={data?.publish_job_count ?? 0} href="/publishing" icon={CalendarClock} />
+        <StatCard label="Published" value={data?.publish_success_count ?? 0} href="/publishing" icon={CheckCircle2} />
+        <StatCard label="Publish failed" value={data?.publish_fail_count ?? 0} href="/publishing" icon={XCircle} />
+        <StatCard label="Scheduled" value={data?.scheduled_count ?? 0} href="/publishing" icon={CalendarClock} />
       </div>
 
       {empty ? (

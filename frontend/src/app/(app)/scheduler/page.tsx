@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { CalendarClock } from "lucide-react";
 
-import { PlaceholderPage } from "@/components/layout/placeholder-page";
+import { ScheduledArticles } from "@/components/scheduler/scheduled-articles";
 
 export const metadata: Metadata = {
   title: "Scheduler",
@@ -10,12 +9,14 @@ export const metadata: Metadata = {
 
 export default function SchedulerPage() {
   return (
-    <PlaceholderPage
-      title="Scheduler"
-      description="Articles queued to publish at a chosen time."
-      icon={CalendarClock}
-      emptyTitle="No scheduled jobs"
-      emptyDescription="Articles you schedule for publishing will be listed here with their run time."
-    />
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight">Scheduler</h1>
+        <p className="text-sm text-muted-foreground">
+          Articles queued for future publishing.
+        </p>
+      </div>
+      <ScheduledArticles />
+    </div>
   );
 }

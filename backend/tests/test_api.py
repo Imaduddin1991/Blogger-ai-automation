@@ -124,12 +124,14 @@ def test_research_not_found(client):
 
 def test_research_list_and_dashboard_empty(client):
     assert client.get("/api/research").json() == []
-    assert client.get("/api/dashboard").json() == {
-        "idea_count": 0,
-        "research_count": 0,
-        "article_count": 0,
-        "publish_job_count": 0,
-    }
+    data = client.get("/api/dashboard").json()
+    assert data["idea_count"] == 0
+    assert data["research_count"] == 0
+    assert data["article_count"] == 0
+    assert data["publish_job_count"] == 0
+    assert data["publish_success_count"] == 0
+    assert data["publish_fail_count"] == 0
+    assert data["scheduled_count"] == 0
 
 
 def test_dashboard_counts(client):

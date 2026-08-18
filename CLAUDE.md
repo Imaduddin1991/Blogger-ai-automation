@@ -7,7 +7,7 @@ Project instruction file for working in this repo with OpenCode/gstack.
 - **Name:** blogger-ai-automation
 - **Purpose:** Free, self-hosted AI Blogger automation platform (idea -> research -> article -> SEO -> checks -> images -> review -> publish to Blogger).
 - **Constraints:** free-first, local AI via Ollama, Blogger-only for v1, lightweight (8 GB RAM, i5 6th gen), modular monolith.
-- **Status:** Phase 1 + 2 + 3 + 4 + 5 implemented and tested (backend 614 tests, frontend 73 tests). Phase 5 (Blogger Publishing) complete: 5A client abstraction, 5B OAuth connect, 5C content builder, 5D publishing service, 5E API, 5F frontend UI. Phase 4 (images) complete: 4A provider abstraction, 4B Wikimedia Commons, 4C validation/dedup, 4D pipeline integration, 4E frontend review UI, 4F hardening. Phase 3.1 quality fixes shipped. See `docs/`.
+- **Status:** Phase 1 + 2 + 3 + 4 + 5 + 6A/6B implemented and tested (backend 648 tests, frontend 73 tests). Phase 6B (Scheduled Publishing) complete: APScheduler integration, schedule/cancel/list endpoints, frontend schedule UI on publish panel, scheduled articles page. Phase 6A (Publish History & Status) complete: publish log API, publish history UI, dashboard stats, status badges. Phase 5 (Blogger Publishing) complete: 5A client abstraction, 5B OAuth connect, 5C content builder, 5D publishing service, 5E API, 5F frontend UI. Phase 4 (images) complete: 4A provider abstraction, 4B Wikimedia Commons, 4C validation/dedup, 4D pipeline integration, 4E frontend review UI, 4F hardening. Phase 3.1 quality fixes shipped. See `docs/`.
 
 ## Ground rules
 

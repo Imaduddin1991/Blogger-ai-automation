@@ -95,6 +95,9 @@ export type Dashboard = {
   research_count: number;
   article_count: number;
   publish_job_count: number;
+  publish_success_count: number;
+  publish_fail_count: number;
+  scheduled_count: number;
 };
 
 export type ImageRecord = {
@@ -291,6 +294,68 @@ export async function connectBlogger(): Promise<BloggerConnect> {
 
 export async function disconnectBlogger(): Promise<BloggerStatus> {
   return request<BloggerStatus>("/blogger/disconnect", { method: "POST" });
+}
+
+// --- Publish log (Phase 6A) ------------------------------------------------
+
+export type PublishLogEntry = {
+  id: number;
+  article_id: number | null;
+  article_title: string | null;
+  action: string;
+  result: string;
+  details: Record<string, unknown> | null;
+  blogger_post_url: string | null;
+  created_at: string;
+};
+
+export type PublishJobEntry = {
+  id: number;
+  article_id: number | null;
+  article_title: string | null;
+  run_at: string;
+  status: string;
+  error: string | null;
+  retry_count: number;
+  published_at: string | null;
+  blogger_post_id: string | null;
+};
+
+export async function listPublishLog(): Promise<PublishLogEntry[]> {
+  return request<PublishLogEntry[]>("/publish-log");
+}
+
+export async function getArticlePublishLog(articleId: number): Promise<PublishLogEntry[]> {
+  return request<PublishLogEntry[]>(`/publish-log/article/${articleId}`);
+}
+
+export async function listPublishJobs(): Promise<PublishJobEntry[]> {
+  return request<PublishJobEntry[]>("/publish-log/jobs");
+}
+
+// --- Schedule (Phase 6B) ------------------------------------------------
+
+export type ScheduledArticle = {
+  article_id: number;
+  article_title: string | null;
+  run_at: string;
+  status: string;
+  job_id: number;
+};
+
+export async function scheduleArticle(articleId: number, runAt: string): Promise<ScheduledArticle> {
+  return request<ScheduledArticle>(`/articles/${articleId}/schedule`, {
+    method: "POST",
+    body: JSON.stringify({ run_at: runAt }),
+  });
+}
+
+export async function cancelSchedule(articleId: number): Promise<{ ok: boolean; article_id: number }> {
+  return request(`/articles/${articleId}/schedule`, { method: "DELETE" });
+}
+
+export async function listScheduled(): Promise<ScheduledArticle[]> {
+  return request<ScheduledArticle[]>("/scheduled");
 }
 
 export function formatDate(value: string): string {

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { Send } from "lucide-react";
 
-import { PlaceholderPage } from "@/components/layout/placeholder-page";
+import { PageHeader } from "@/components/layout/page-header";
+import { PublishHistory } from "@/components/publishing/publish-history";
 
 export const metadata: Metadata = {
   title: "Publishing",
@@ -10,12 +10,12 @@ export const metadata: Metadata = {
 
 export default function PublishingPage() {
   return (
-    <PlaceholderPage
-      title="Publishing"
-      description="Send approved articles to Blogger and track status."
-      icon={Send}
-      emptyTitle="Nothing published yet"
-      emptyDescription="Articles you publish to Blogger will be tracked here, including failures and retries."
-    />
+    <div className="space-y-6">
+      <PageHeader
+        title="Publishing"
+        description="Track publish attempts, successes, and failures for your articles."
+      />
+      <PublishHistory />
+    </div>
   );
 }

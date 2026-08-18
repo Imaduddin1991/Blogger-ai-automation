@@ -52,15 +52,22 @@ function StatusBadge({ article }: { article: Article }) {
     article.status === "researching" ||
     article.status === "images_searching";
   const variant =
-    article.status === "checked"
+    article.status === "published"
       ? "default"
-      : article.status === "drafted" || article.status === "seo_done"
-        ? "secondary"
-        : article.status === "publish_failed"
-          ? "destructive"
-          : "outline";
+      : article.status === "checked"
+        ? "default"
+        : article.status === "drafted" || article.status === "seo_done"
+          ? "secondary"
+          : article.status === "publish_failed"
+            ? "destructive"
+            : article.status === "publishing"
+              ? "secondary"
+              : "outline";
   return (
-    <Badge variant={variant} className="shrink-0">
+    <Badge
+      variant={variant}
+      className={`shrink-0 ${article.status === "published" ? "bg-emerald-600" : ""}`}
+    >
       {running ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
       {statusLabel(article.status)}
     </Badge>
