@@ -44,6 +44,7 @@ class BlogConnection(Base, TimestampMixin):
     blog_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     blog_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    token_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="disconnected")
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 

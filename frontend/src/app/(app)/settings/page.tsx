@@ -5,6 +5,7 @@ import {
   ExternalLink,
   LinkIcon,
   Loader2,
+  RefreshCw,
   Unlink,
 } from "lucide-react";
 
@@ -12,6 +13,8 @@ import {
   getBloggerStatus,
   connectBlogger,
   disconnectBlogger,
+  refreshBlogger,
+  formatDate,
   type BloggerStatus,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +72,19 @@ export default function SettingsPage() {
     setActionError(null);
     try {
       const status = await disconnectBlogger();
+      setBlogStatus(status);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const status = await refreshBlogger();
       setBlogStatus(status);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
@@ -136,18 +152,39 @@ export default function SettingsPage() {
                   </a>
                 ) : null}
               </div>
-              <Button
-                variant="outline"
-                onClick={() => void handleDisconnect()}
-                disabled={busy}
-              >
-                {busy ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Unlink className="h-4 w-4" aria-hidden="true" />
-                )}
-                Disconnect
-              </Button>
+              {blogStatus.token_expires_at ? (
+                <p className="text-xs text-muted-foreground">
+                  Token expires {formatDate(blogStatus.token_expires_at)}
+                </p>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleRefresh()}
+                  disabled={busy}
+                >
+                  {busy ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  Refresh token
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleDisconnect()}
+                  disabled={busy}
+                >
+                  {busy ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Unlink className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  Disconnect
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">

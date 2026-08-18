@@ -158,11 +158,29 @@ async def _publish_job(article_id: int, as_draft: bool = False) -> None:
             return
 
         from app.config import get_settings
-        from services.blogger_client import BloggerClient, TokenCryptor
+        from services.blogger_client import BloggerClient, TokenCryptor, refresh_if_needed
 
         settings = get_settings()
         cryptor = TokenCryptor(settings.encryption_key)
         token = cryptor.decrypt_token(conn.token_encrypted)
+
+        # Auto-refresh token if expired or near-expiry before publish
+        try:
+            token = await refresh_if_needed(token)
+        except Exception as exc:
+            logger.warning("Token auto-refresh failed for article %s: %s", article_id, exc)
+            conn.status = "token_expired"
+            conn.last_error = str(exc)
+            db.commit()
+            _persist_failure(article_id, "publish", RuntimeError(f"Token expired: {exc}"))
+            return
+
+        # Persist refreshed token if it changed
+        if token is not cryptor.decrypt_token(conn.token_encrypted):
+            conn.token_encrypted = cryptor.encrypt_token(token)
+            conn.token_expires_at = token.expiry
+            db.commit()
+
         client = BloggerClient(token=token)
 
         from pipeline.publish import publish_to_blogger

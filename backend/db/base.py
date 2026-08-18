@@ -135,6 +135,10 @@ _PUBLISHJOB_COLUMNS: tuple[tuple[str, str], ...] = (
     ("blogger_post_id", "VARCHAR(100)"),
 )
 
+_BLOG_CONNECTION_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("token_expires_at", "DATETIME"),
+)
+
 
 def apply_publish_column_migrations(engine) -> None:
     """Add the Phase 5D Blogger-publishing columns to existing tables.
@@ -145,7 +149,8 @@ def apply_publish_column_migrations(engine) -> None:
         return
     with engine.begin() as conn:
         for table, columns in [("articles", _ARTICLE_PUBLISH_COLUMNS),
-                               ("publish_jobs", _PUBLISHJOB_COLUMNS)]:
+                               ("publish_jobs", _PUBLISHJOB_COLUMNS),
+                               ("blog_connections", _BLOG_CONNECTION_COLUMNS)]:
             try:
                 existing = {
                     row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")

@@ -523,3 +523,36 @@ def _extract_api_error(resp: httpx.Response) -> str:
         )
     except Exception:
         return resp.text[:200]
+
+
+# --- Token refresh helpers -------------------------------------------------
+
+# Tokens expiring within 5 minutes are proactively refreshed
+_NEAR_EXPIRY_SECONDS = 300
+
+
+def is_token_near_expiry(token: TokenMaterial) -> bool:
+    """Return True if the token is expired or will expire within 5 minutes."""
+    if token.is_expired:
+        return True
+    if token.expiry is None:
+        return False
+    remaining = (token.expiry - datetime.now(timezone.utc)).total_seconds()
+    return remaining < _NEAR_EXPIRY_SECONDS
+
+
+async def refresh_if_needed(token: TokenMaterial, *, client: BloggerClient | None = None) -> TokenMaterial:
+    """Refresh the token if expired or near-expiry. Returns the (possibly new) token.
+
+    If a BloggerClient is provided, it is reused; otherwise a fresh one is created.
+    Raises BloggerAuthError if refresh fails (caller should set status=token_expired).
+    """
+    if not is_token_near_expiry(token):
+        return token
+    if not token.refresh_token:
+        raise BloggerAuthError("No refresh token available")
+    if client is None:
+        client = BloggerClient(token=token)
+    else:
+        client.token = token
+    return await client.refresh_access_token()

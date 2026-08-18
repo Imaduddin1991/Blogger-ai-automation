@@ -56,6 +56,7 @@ function makeBlogStatus(overrides: Partial<BloggerStatus> = {}): BloggerStatus {
     blog_url: "https://myblog.blogspot.com",
     blog_name: "My Blog",
     status: "connected",
+    token_expires_at: null,
     ...overrides,
   };
 }

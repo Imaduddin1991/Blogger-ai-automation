@@ -187,6 +187,7 @@ class BloggerStatusRead(BaseModel):
     blog_url: str | None = None
     blog_name: str | None = None
     status: str = "disconnected"
+    token_expires_at: datetime | None = None
 
 
 class BloggerConnectRead(BaseModel):

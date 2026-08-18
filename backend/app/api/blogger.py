@@ -123,13 +123,18 @@ def get_blogger_status(
         cryptor = TokenCryptor(settings.encryption_key)
         token = cryptor.decrypt_token(token_encrypted)
         if token.is_expired:
-            return BloggerStatusRead(connected=False, status="token_expired")
+            return BloggerStatusRead(
+                connected=False,
+                status="token_expired",
+                token_expires_at=conn.token_expires_at,
+            )
         return BloggerStatusRead(
             connected=True,
             blog_id=conn.blog_id or "",
             blog_url=conn.blog_url or "",
             blog_name=conn.name or "",
             status="connected",
+            token_expires_at=conn.token_expires_at,
         )
     except BloggerError:
         return BloggerStatusRead(connected=False, status="disconnected")
@@ -209,6 +214,7 @@ async def blogger_callback(
 
     conn = _ensure_connection_row(db)
     conn.token_encrypted = encrypted
+    conn.token_expires_at = token.expiry
     conn.status = "connected"
     conn.last_error = None
     db.commit()
@@ -285,9 +291,54 @@ def disconnect_blogger(
         return BloggerStatusRead(connected=False, status="disconnected")
 
     conn.token_encrypted = None
+    conn.token_expires_at = None
     conn.blog_id = None
     conn.blog_url = None
     conn.status = "disconnected"
     conn.last_error = None
     db.commit()
     return BloggerStatusRead(connected=False, status="disconnected")
+
+
+@router.post("/refresh", response_model=BloggerStatusRead)
+async def refresh_token(
+    db: Session = Depends(get_db),
+) -> BloggerStatusRead:
+    """Manually refresh the Blogger OAuth token (for testing/debugging)."""
+    conn = _get_connection(db)
+    if not conn or conn.status != "connected" or not conn.token_encrypted:
+        raise HTTPException(status_code=400, detail="No active Blogger connection")
+
+    from app.config import get_settings
+    from services.blogger_client import TokenCryptor, refresh_if_needed
+
+    settings = get_settings()
+    cryptor = TokenCryptor(settings.encryption_key)
+    token = cryptor.decrypt_token(conn.token_encrypted)
+
+    try:
+        new_token = await refresh_if_needed(token)
+    except BloggerAuthError as exc:
+        conn.status = "token_expired"
+        conn.last_error = str(exc)
+        db.commit()
+        return BloggerStatusRead(
+            connected=False,
+            status="token_expired",
+            token_expires_at=conn.token_expires_at,
+        )
+    except BloggerError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    conn.token_encrypted = cryptor.encrypt_token(new_token)
+    conn.token_expires_at = new_token.expiry
+    db.commit()
+
+    return BloggerStatusRead(
+        connected=True,
+        blog_id=conn.blog_id or "",
+        blog_url=conn.blog_url or "",
+        blog_name=conn.name or "",
+        status="connected",
+        token_expires_at=conn.token_expires_at,
+    )

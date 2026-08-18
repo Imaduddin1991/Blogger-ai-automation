@@ -148,6 +148,7 @@ export type BloggerStatus = {
   blog_url: string | null;
   blog_name: string | null;
   status: string;
+  token_expires_at: string | null;
 };
 
 export type BloggerConnect = {
@@ -294,6 +295,10 @@ export async function connectBlogger(): Promise<BloggerConnect> {
 
 export async function disconnectBlogger(): Promise<BloggerStatus> {
   return request<BloggerStatus>("/blogger/disconnect", { method: "POST" });
+}
+
+export async function refreshBlogger(): Promise<BloggerStatus> {
+  return request<BloggerStatus>("/blogger/refresh", { method: "POST" });
 }
 
 // --- Publish log (Phase 6A) ------------------------------------------------
