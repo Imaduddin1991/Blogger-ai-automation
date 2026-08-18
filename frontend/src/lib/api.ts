@@ -285,6 +285,12 @@ export async function retryPublish(articleId: number): Promise<PublishRead> {
   });
 }
 
+export async function deletePublishedPost(
+  articleId: number,
+): Promise<{ ok: boolean; article_id: number; status: string }> {
+  return request(`/articles/${articleId}/publish`, { method: "DELETE" });
+}
+
 export async function getBloggerStatus(): Promise<BloggerStatus> {
   return request<BloggerStatus>("/blogger/status");
 }

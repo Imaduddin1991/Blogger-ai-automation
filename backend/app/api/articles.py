@@ -386,3 +386,57 @@ def retry_publish(article_id: int, db: Session = Depends(get_db)) -> PublishRead
     _get_publish_connection(db, article)
     start_background_publish(article.id, as_draft=False)
     return PublishRead.model_validate(article)
+
+
+@router.delete("/{article_id}/publish")
+async def delete_published_post(article_id: int, db: Session = Depends(get_db)) -> dict:
+    """Delete a published article from Blogger and reset to DRAFT.
+
+    Requires the article to be in PUBLISHED state with a blogger_post_id.
+    Records the deletion in PublishLog.
+    """
+    article = _get(db, article_id)
+    if article.status != PUBLISHED:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Article must be '{PUBLISHED}' to delete from Blogger, current status is '{article.status}'.",
+        )
+    if not article.blogger_post_id:
+        raise HTTPException(status_code=400, detail="Article has no Blogger post ID.")
+
+    conn = _get_publish_connection(db, article)
+    saved_post_id = article.blogger_post_id
+
+    from app.config import get_settings
+    from services.blogger_client import BloggerClient, TokenCryptor, refresh_if_needed
+    from pipeline.publish import _log_publish_event
+
+    settings = get_settings()
+    cryptor = TokenCryptor(settings.encryption_key)
+    token = cryptor.decrypt_token(conn.token_encrypted)
+
+    try:
+        token = await refresh_if_needed(token)
+    except Exception:
+        pass  # Best-effort refresh; delete may still work with stale token
+
+    client = BloggerClient(token=token)
+    try:
+        await client.delete_post(conn.blog_id, article.blogger_post_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to delete Blogger post: {exc}",
+        )
+
+    # Clear Blogger metadata and transition to DRAFT
+    article.blogger_post_id = None
+    article.blogger_post_url = None
+    article.blogger_published_at = None
+    article.blogger_status = None
+    article.status = transition(PUBLISHED, DRAFT)
+    db.commit()
+
+    _log_publish_event(db, article.id, "delete", "success", {"blogger_post_id": saved_post_id})
+
+    return {"ok": True, "article_id": article_id, "status": article.status}

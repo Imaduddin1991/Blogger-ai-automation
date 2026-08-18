@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CalendarClock, ExternalLink, Globe, Loader2, RotateCw, Save, X } from "lucide-react";
+import { CalendarClock, ExternalLink, Globe, Loader2, RotateCw, Save, Trash2, X } from "lucide-react";
 
 import {
   getArticle,
   publishArticle,
   retryPublish,
+  deletePublishedPost,
   getBloggerStatus,
   scheduleArticle,
   cancelSchedule,
@@ -201,6 +202,20 @@ export function ArticlePublishPanel({
     }
   }, [article.id, onChange]);
 
+  const handleDelete = useCallback(async () => {
+    if (!window.confirm("Delete this post from Blogger? This cannot be undone.")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deletePublishedPost(article.id);
+      const fresh = await getArticle(article.id);
+      onChange(fresh);
+    } catch (e) {
+      setBusy(false);
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [article.id, onChange]);
+
   if (!PUBLISH_VISIBLE.has(article.status)) return null;
 
   const isPublishing = article.status === "publishing" || busy;
@@ -331,14 +346,25 @@ export function ArticlePublishPanel({
             Retry publish
           </Button>
         ) : article.status === "published" && blogUrl ? (
-          <Button
-            variant="outline"
-            onClick={() => void handleRetry()}
-            disabled={isPublishing || !blogStatus?.connected}
-          >
-            <RotateCw className="h-4 w-4" aria-hidden="true" />
-            Update on Blogger
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => void handleRetry()}
+              disabled={isPublishing || !blogStatus?.connected}
+            >
+              <RotateCw className="h-4 w-4" aria-hidden="true" />
+              Update on Blogger
+            </Button>
+            <Button
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => void handleDelete()}
+              disabled={isPublishing}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              Delete from Blogger
+            </Button>
+          </div>
         ) : null}
       </CardContent>
     </Card>

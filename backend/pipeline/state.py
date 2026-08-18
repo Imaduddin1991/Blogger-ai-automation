@@ -47,7 +47,7 @@ TRANSITIONS: dict[str, set[str]] = {
     SCHEDULED: {PUBLISHING, APPROVED},       # fire now, or reschedule
     PUBLISHING: {PUBLISHED, PUBLISH_FAILED, APPROVED},
     PUBLISH_FAILED: {PUBLISHING, SCHEDULED, APPROVED},
-    PUBLISHED: set(),                        # terminal
+    PUBLISHED: {DRAFT},                        # delete from Blogger -> re-edit
 }
 
 

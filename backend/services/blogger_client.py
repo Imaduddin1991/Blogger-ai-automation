@@ -499,6 +499,10 @@ class BloggerClient:
             next_page_token=data.get("nextPageToken", ""),
         )
 
+    async def delete_post(self, blog_id: str, post_id: str) -> None:
+        """Delete a post from Blogger."""
+        await self._api_request("DELETE", f"blogs/{blog_id}/posts/{post_id}")
+
 
 # --- Internal helpers -------------------------------------------------------
 
